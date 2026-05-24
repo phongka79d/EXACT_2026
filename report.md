@@ -327,3 +327,86 @@
 - Sample content preview: `{"ping":"pong"}`.
 - Secret handling: no API key, auth header, or raw `.env` value was printed or written.
 - Updated status: the earlier `network_or_provider_unavailable` blocker is resolved for this environment at rerun time.
+
+## Batch 5 Execution Result - 2026-05-24
+
+### Completed Tasks
+- B5-T1: Complete.
+- B5-T2: Complete.
+- B5-T3: Complete.
+- B5-T4: Complete.
+- B5-T5: Complete.
+- B5-T6: Complete.
+- B5-T7: Complete.
+- B5-T8: Complete.
+- B5-T9: Complete.
+- B5-T10: Complete.
+- B5-T11: Complete.
+- B5-T12: Complete.
+
+### Files Created or Modified
+- app/llm/__init__.py
+- app/llm/client.py
+- app/llm/errors.py
+- app/llm/extractor.py
+- app/llm/prompts.py
+- scripts/smoke_test_llm_parse_frame.py
+- tests/test_llm_frame_extraction.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/llm/extractor.py (485 lines): kept parser/repair/retry/cache behavior together in one module for this batch so the frame-extraction contract and diagnostics remain centralized.
+- task.md (1047 lines): updated only to mark Batch 5 completion checklist, batch/milestone status, and task IDs.
+- report.md (347 lines): appended the Batch 5 execution section while preserving prior batch history in the shared report file.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_llm_frame_extraction.py` - Passed.
+- `python -m unittest` - Passed.
+- `python scripts/smoke_test_llm_parse_frame.py --env-path .env --timeout-seconds 20 --max-attempts 3` - Passed (live parse-frame smoke).
+
+### Acceptance Criteria Check
+- Mocked valid frame succeeds: Satisfied.
+- Invalid first-pass frame triggers repair: Satisfied.
+- Transient failures retry with backoff: Satisfied.
+- Runtime frame extractor input excludes `premises-FOL`, `answer`, `explanation`, and `idx`: Satisfied (metadata guard and tests).
+- Production path uses configured `.env` model and does not silently switch provider: Satisfied (`OpenAICompatibleChatClient.from_env` + runtime model in diagnostics).
+- Live parse-frame smoke succeeds when provider access is available, or blocker is documented with sanitized details: Satisfied (final live smoke passed).
+
+### Artifacts Produced
+- New LLM package for compact frame extraction: configured async client, extractor interface/protocols, mock extractor, strict JSON/frame validation, repair loop, retry/backoff, and cache keying.
+- Prompt templates for premise/candidate extraction plus repair prompts.
+- Live credential-gated parse-frame smoke script with sanitized output.
+- Batch 5 unit tests covering success, repair, retry, cache-hit, and reference-field exclusion.
+
+### Checklist Update
+- Marked Batch 5 completion checklist items complete in `task.md`.
+- Marked `Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime` complete in the Progress Tracker.
+- Marked `M5 - LLM Semantic Parser` complete in the Progress Tracker.
+- Marked task IDs `B5-T1` through `B5-T12` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Kept strict parse-frame validation but added deterministic normalization for common provider output wrappers/missing slot types before validation, then enforced formal schema checks.
+- Added repair prompts that include original runtime text and validation errors with source metadata to improve valid-frame recovery.
+- Exposed extraction diagnostics (`model`, `prompt_version`, `attempts`, `repair_count`, `retry_count`, `cache_hit`, sanitized errors, endpoint) so downstream debug traces can capture Batch 5-required metadata.
+- Implemented cache keys from normalized source text + prompt version + extractor version + model identifier.
+
+### Risks or Open Issues
+- Provider output formatting can still vary across calls; current extractor uses repair + deterministic normalization to keep strict schema enforcement robust.
+- Temporary inaccessible directories in repository root (`tmpexub70qe`, `tmprpdk9dj7`) remain unchanged and outside Batch 5 scope.
+
+### Minor Issues Fixed During Execution
+- Added fenced/extra-text JSON object extraction fallback before strict object parsing to handle provider responses that wrap JSON.
+- Strengthened prompt templates with explicit valid-frame shapes after observing live shape mismatches.
+- Added deterministic slot-type inference for common underspecified provider payloads before schema validation.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed by `FrameExtractionInput` metadata guard and tests.
+- No overfit or hardcode shortcut was introduced: Confirmed; no record/question/answer-label-specific logic added.
+- `.env` secrets were not logged or written: Confirmed; smoke output includes sanitized endpoint/model only.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 5 parse-frame extraction scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 6 can proceed with the new extractor contract and diagnostics metadata for pipeline trace integration.
+- Async orchestration can now consume stable APIs for premise/candidate frame extraction and cache behavior without adding solver logic yet.

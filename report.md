@@ -146,3 +146,96 @@
 ### Notes for Next Batch
 - Batch 3 can proceed using the stable question-type/candidate contract and cache-key utilities.
 - Parse-frame and AST work can consume candidate labels/source metadata already emitted by `app/questions/candidates.py`.
+
+## Batch 3 Execution Result - 2026-05-24
+
+### Completed Tasks
+- B3-T1: Complete.
+- B3-T2: Complete.
+- B3-T3: Complete.
+- B3-T4: Complete.
+- B3-T5: Complete.
+- B3-T6: Complete.
+- B3-T7: Complete.
+- B3-T8: Complete.
+- B3-T9: Complete.
+- B3-T10: Complete.
+- B3-T11: Complete.
+
+### Files Created or Modified
+- app/logic/__init__.py
+- app/logic/frames/__init__.py
+- app/logic/frames/models.py
+- app/logic/ast/__init__.py
+- app/logic/ast/terms.py
+- app/logic/ast/nodes.py
+- app/logic/compiler/__init__.py
+- app/logic/compiler/frame_compiler.py
+- app/logic/validation/__init__.py
+- app/logic/validation/frames.py
+- app/logic/validation/ast.py
+- app/logic/normalization/__init__.py
+- app/logic/normalization/logic.py
+- tests/test_parse_frames.py
+- tests/test_frame_compiler.py
+- tests/test_logic_ast.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/logic/frames/models.py (315 lines): contains all parse-frame and frame-slot dataclass contracts plus deterministic parsing helpers in one module so frame schema behavior is centralized for Batch 3.
+- task.md (1360 lines): updated only to mark Batch 3 checklist/batch/milestone/task-ID progress.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_parse_frames.py` - Passed.
+- `python -m unittest tests/test_frame_compiler.py` - Passed.
+- `python -m unittest tests/test_logic_ast.py` - Passed.
+- `python -m unittest tests/test_cache_keys.py` - Passed.
+- `python -m unittest tests/test_candidate_extraction.py` - Passed.
+- `python -m unittest tests/test_runtime_loader.py` - Passed.
+- `python -m unittest tests/test_flatten_dataset.py` - Passed.
+- `python -m unittest` - Passed.
+
+### Acceptance Criteria Check
+- All required parse-frame kinds validate: Satisfied (`rule`, `fact`, `claim`, `compound`, `ambiguous` covered in `tests/test_parse_frames.py`).
+- Rule/fact/claim frames compile to expected AST structures: Satisfied (`tests/test_frame_compiler.py`).
+- Numeric frame slots compile into numeric AST nodes: Satisfied (`numeric_value` and `numeric_condition` paths compile into `compare`/`num_ref`/`number` nodes and are test-covered).
+- Invalid scopes and malformed numeric expressions fail clearly: Satisfied (`tests/test_parse_frames.py`, `tests/test_logic_ast.py`).
+- Source metadata survives compilation and normalization: Satisfied (`tests/test_frame_compiler.py`, `tests/test_logic_ast.py`).
+
+### Artifacts Produced
+- Parse-frame schema/models and slot models under `app/logic/frames/`.
+- Typed AST node/term models under `app/logic/ast/`.
+- Deterministic frame-to-AST compiler under `app/logic/compiler/`.
+- Frame and AST validators under `app/logic/validation/`.
+- AST normalization utilities under `app/logic/normalization/`.
+- Batch 3 unit tests for frame validation, compilation, AST validation, and normalization.
+
+### Checklist Update
+- Marked Batch 3 completion checklist items as complete in `task.md`.
+- Marked `Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization` complete in the Progress Tracker.
+- Marked `M3 - Logic Representation Contract` complete in the Progress Tracker.
+- Marked task IDs `B3-T1` through `B3-T11` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Kept compact parse-frame contracts explicit with strict dataclasses and parsers before solver integration.
+- Implemented deterministic frame-to-AST compilation that keeps implication direction intact and attaches required source metadata at AST roots.
+- Separated frame validation, AST validation, and normalization into dedicated modules to keep boundaries clear for later batches.
+- Enforced variable binding and predicate-arity checks in AST validation to protect downstream solver safety.
+
+### Risks or Open Issues
+- Inaccessible temporary directories remain in repository root (`tmpexub70qe`, `tmprpdk9dj7`), unchanged from prior work and outside Batch 3 scope.
+
+### Minor Issues Fixed During Execution
+- None.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed for all new Batch 3 modules and tests.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 3 scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 4 can proceed with structured debug/proof trace models that now can reference stable frame/AST/compiler contracts.
+- Trace schemas in Batch 4 can safely rely on Batch 3 metadata fields (`source_id`, `source_text`, `premise_id`, `candidate_label`) now implemented and validated.

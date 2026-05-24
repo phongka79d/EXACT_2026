@@ -56,6 +56,9 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
 - If a small defect is discovered inside the current batch scope, fix it and document it under `Minor Issues Fixed During Execution` in `report.md`.
 - Do not perform unrelated cleanup, broad refactors, dependency swaps, or architecture changes outside the current batch.
 - Run required validations for the batch. If live API credentials or services block validation, keep the production path implemented, run mocked tests, and report the live validation blocker honestly.
+- Starting with the next unfinished batch after this rule is added, run an early credential-gated LLM connectivity smoke check before adding more downstream logic if no successful live LLM smoke has already been recorded in `report.md`.
+- The early LLM smoke check must use `.env` values for `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL`, send only a tiny runtime-safe prompt, validate basic response shape, and redact all secrets.
+- When the LLM parse-frame extractor is implemented, run a second live smoke check that requests strict compact parse-frame JSON and validates the returned frame shape.
 
 ## Batch Map / Milestone Map
 
@@ -325,17 +328,17 @@ Every later reasoning layer depends on stable semantics. The LLM must produce co
 
 ### Completion Checklist
 
-- [ ] Parse-frame models exist.
-- [ ] Typed AST models exist.
-- [ ] Frame-to-AST compiler exists.
-- [ ] Validation and normalization tests pass.
-- [ ] `report.md` contains Batch 3 result.
+- [x] Parse-frame models exist.
+- [x] Typed AST models exist.
+- [x] Frame-to-AST compiler exists.
+- [x] Validation and normalization tests pass.
+- [x] `report.md` contains Batch 3 result.
 
 ## Mandatory Batch 4 - Debug Trace and Proof Trace Infrastructure
 
 ### Goal
 
-Create structured proof trace and debug trace infrastructure before adding complex parsing and reasoning.
+Create structured proof trace and debug trace infrastructure before adding complex parsing and reasoning, and validate live LLM connectivity early enough to catch provider/config issues before Batch 5.
 
 ### Why this batch exists
 
@@ -349,13 +352,15 @@ The project needs root-cause visibility. Later LLM, numeric, symbolic, fallback,
 
 ### Exact Task List
 
-- B4-T1: Define debug trace schema with `sample_id`, `record_id`, `question_id`, stage statuses, timestamps/durations, cache metadata, warnings, and root-cause category.
-- B4-T2: Define proof trace step schema with used premises, derived facts, solver route, numeric derivations, and source citations.
-- B4-T3: Add root-cause categories for data validation, question parsing, LLM frame extraction, frame validation, frame compilation, AST validation, numeric failure, solver unsupported, Z3 encoding, fallback, timeout, and output formatting.
-- B4-T4: Implement safe serialization and secret redaction for traces.
-- B4-T5: Implement JSON/JSONL artifact writers for local debug output.
-- B4-T6: Add tests that traces serialize safely and never include `.env` secrets or reference-only fields.
-- B4-T7: Append Batch 4 execution details to `report.md`.
+- B4-T1: Add or run an early credential-gated LLM connectivity smoke check using `.env` if no successful live LLM smoke has already been recorded in `report.md`.
+- B4-T2: Ensure the smoke check validates authentication/model availability/basic response shape with a tiny runtime-safe prompt and never prints raw `.env` secrets.
+- B4-T3: Define debug trace schema with `sample_id`, `record_id`, `question_id`, stage statuses, timestamps/durations, cache metadata, warnings, and root-cause category.
+- B4-T4: Define proof trace step schema with used premises, derived facts, solver route, numeric derivations, and source citations.
+- B4-T5: Add root-cause categories for data validation, question parsing, LLM frame extraction, frame validation, frame compilation, AST validation, numeric failure, solver unsupported, Z3 encoding, fallback, timeout, and output formatting.
+- B4-T6: Implement safe serialization and secret redaction for traces.
+- B4-T7: Implement JSON/JSONL artifact writers for local debug output.
+- B4-T8: Add tests that traces serialize safely and never include `.env` secrets or reference-only fields.
+- B4-T9: Append Batch 4 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -369,21 +374,24 @@ The project needs root-cause visibility. Later LLM, numeric, symbolic, fallback,
 - Proof trace step schema.
 - Root-cause category list.
 - Safe JSON/JSONL artifact writing utility.
+- Early LLM connectivity smoke result recorded in `report.md` as passed, failed, or blocked with sanitized details.
 
 ### Acceptance Criteria
 
 - Trace serialization is deterministic and secret-safe.
 - Root-cause categories are stable and test-covered.
 - Trace objects can reference runtime IDs without containing gold answers or FOL.
+- Live LLM connectivity has been tested from `.env` when credentials/service are available, or the exact sanitized blocker is documented.
 
 ### Required Tests or Validations
 
 - `python -m unittest tests/test_debug_trace.py`
 - Earlier tests that may interact with trace models.
+- Early LLM connectivity smoke command using configured `.env`, or a documented blocked live validation with sanitized details.
 
 ### Explicit Non-Goals
 
-- Do not implement actual LLM calls or solver routes.
+- Do not implement LLM parse-frame extraction or solver routes.
 - Do not generate public explanations yet.
 - Do not include raw API keys or reference-only fields in fixtures.
 
@@ -392,6 +400,7 @@ The project needs root-cause visibility. Later LLM, numeric, symbolic, fallback,
 - [ ] Debug trace schema exists.
 - [ ] Proof trace schema exists.
 - [ ] Redaction tests pass.
+- [ ] Early LLM connectivity smoke is passed or honestly reported as blocked.
 - [ ] `report.md` contains Batch 4 result.
 
 ## Mandatory Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
@@ -423,7 +432,7 @@ The LLM is the semantic parser in the approved flow. This batch connects natural
 - B5-T8: Cache parse frames by normalized source text, prompt version, extractor version, and model identifier.
 - B5-T9: Track model identifier, prompt version, attempts, repair count, cache hit, and sanitized errors in debug traces.
 - B5-T10: Add tests for valid mock frame, invalid frame repair, transient retry, cache hit, and reference-field exclusion.
-- B5-T11: Add optional credential-gated live smoke validation if environment access is available; report honestly if skipped.
+- B5-T11: Add required credential-gated live parse-frame smoke validation when `.env` contains `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL`; report sanitized blockers honestly if provider access fails.
 - B5-T12: Append Batch 5 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
@@ -449,18 +458,20 @@ The LLM is the semantic parser in the approved flow. This batch connects natural
 - Transient failures retry with backoff.
 - Runtime frame extractor input excludes `premises-FOL`, `answer`, `explanation`, and `idx`.
 - Production path uses configured `.env` model and does not silently switch provider.
+- Live parse-frame smoke succeeds when provider access is available, or the blocker is documented with sanitized details.
 
 ### Required Tests or Validations
 
 - `python -m unittest tests/test_llm_frame_extraction.py`
 - Relevant previous tests.
-- Optional live smoke command only if safe credentials/service are available.
+- Live parse-frame smoke command using configured `.env` model when required settings are present, or a documented blocked live validation with sanitized details.
 
 ### Explicit Non-Goals
 
 - Do not let the LLM answer questions.
 - Do not ask the LLM for full ASTs in the main path.
 - Do not include gold FOL or gold answers in prompts.
+- Do not treat mocked tests as sufficient when configured live provider access is available.
 
 ### Completion Checklist
 
@@ -468,6 +479,7 @@ The LLM is the semantic parser in the approved flow. This batch connects natural
 - [ ] Mock extractor exists.
 - [ ] Configured async client exists.
 - [ ] Repair/retry/cache behavior is tested.
+- [ ] Live parse-frame smoke is passed or honestly reported as blocked.
 - [ ] `report.md` contains Batch 5 result.
 
 ## Mandatory Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
@@ -1115,6 +1127,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] Explanations are generated from proof traces only.
 - [ ] Debug traces identify root causes without leaking secrets.
 - [ ] Model configuration uses `.env` as source of truth and documents `SHOPAIKEY_MODEL` without exposing the API key.
+- [ ] Early live LLM connectivity smoke has passed or is documented as blocked with sanitized details.
+- [ ] Live parse-frame smoke has passed once the extractor exists, or is documented as blocked with sanitized details.
 - [ ] Evaluation scripts score predictions only outside runtime.
 - [ ] NO DATA OVERFITTING: no record-specific tuning, answer leakage, gold-FOL leakage, or dataset-row shortcuts.
 - [ ] NO HARDCODING: no hardcoded answers, entity lists, predicate maps, numeric thresholds, or record-specific rule branches.
@@ -1127,7 +1141,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 - [x] Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
 - [x] Batch 2 - Cache Keys, Candidate Extraction, and Question Typing
-- [ ] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
+- [x] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
 - [ ] Batch 4 - Debug Trace and Proof Trace Infrastructure
 - [ ] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
 - [ ] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
@@ -1143,7 +1157,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 - [x] M1 - Runtime-Safe Foundation
 - [x] M2 - Query Contract
-- [ ] M3 - Logic Representation Contract
+- [x] M3 - Logic Representation Contract
 - [ ] M4 - Observability Foundation
 - [ ] M5 - LLM Semantic Parser
 - [ ] M6 - Async Runtime Skeleton
@@ -1176,17 +1190,17 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B2-T8
 - [x] B2-T9
 - [x] B2-T10
-- [ ] B3-T1
-- [ ] B3-T2
-- [ ] B3-T3
-- [ ] B3-T4
-- [ ] B3-T5
-- [ ] B3-T6
-- [ ] B3-T7
-- [ ] B3-T8
-- [ ] B3-T9
-- [ ] B3-T10
-- [ ] B3-T11
+- [x] B3-T1
+- [x] B3-T2
+- [x] B3-T3
+- [x] B3-T4
+- [x] B3-T5
+- [x] B3-T6
+- [x] B3-T7
+- [x] B3-T8
+- [x] B3-T9
+- [x] B3-T10
+- [x] B3-T11
 - [ ] B4-T1
 - [ ] B4-T2
 - [ ] B4-T3
@@ -1194,6 +1208,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] B4-T5
 - [ ] B4-T6
 - [ ] B4-T7
+- [ ] B4-T8
+- [ ] B4-T9
 - [ ] B5-T1
 - [ ] B5-T2
 - [ ] B5-T3

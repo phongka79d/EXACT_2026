@@ -173,6 +173,16 @@ Required LLM config:
 
 The implementation should treat `.env` as the source of truth for model selection. Tests may use a mock LLM client, but production/runtime code must not silently switch to another model.
 
+Run a live LLM connectivity smoke test as soon as config loading exists and before adding substantial downstream logic. The smoke test should:
+
+- use `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL` from `.env`
+- send a tiny runtime-safe prompt that does not include dataset reference fields
+- verify authentication, model availability, timeout behavior, and basic response shape
+- redact API keys, auth headers, and secret-bearing URLs from logs and traces
+- fail or report a blocked live validation clearly instead of silently relying only on mocks
+
+When the LLM parse-frame extractor is implemented, run a second live smoke test that asks the configured model for strict compact parse-frame JSON and validates the returned frame shape.
+
 ## 3. Async Execution and Cache Modes
 
 Local evaluation processes flattened samples asynchronously.

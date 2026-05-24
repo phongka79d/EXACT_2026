@@ -60,6 +60,7 @@ Already done:
 Missing:
 
 - Runtime-safe loader/sanitizer.
+- Early live LLM connectivity smoke validation using `.env` model settings.
 - Typed Logic AST schema with implementation-ready validation.
 - Question candidate extraction.
 - LLM parse-frame extractor with async retry/repair/cache behavior.
@@ -503,6 +504,15 @@ Converter strategy:
 - Premise frame extraction and candidate frame extraction use separate prompts.
 - Prompts include generic frame examples, allowed frame kinds/slot types, metadata requirements, and instructions to return uncertainty instead of inventing entities.
 - Runtime prompts must never include `premises-FOL`, `answer`, `explanation`, or `idx`.
+
+Early live validation:
+
+- Run an LLM connectivity smoke test as soon as `.env` config loading exists, before adding substantial downstream parsing/solver logic.
+- The early smoke test must use `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL` from `.env`, but must never print or serialize raw secrets.
+- The early smoke prompt should be tiny and runtime-safe, for example asking the model to return a minimal JSON object unrelated to dataset answers.
+- The early smoke test validates authentication, model availability, timeout behavior, and basic response shape only; it does not validate parse-frame quality.
+- If `.env` is missing required values or the provider/network is unavailable, report the smoke as blocked with sanitized details.
+- Once the LLM parse-frame extractor exists, run a second live smoke test that requests strict compact parse-frame JSON and validates the returned frame schema.
 
 Numeric frame extraction requirements:
 
@@ -1042,6 +1052,7 @@ Expected files/modules:
 
 Tasks:
 
+- Add or run an early credential-gated LLM connectivity smoke check using `.env` if it has not already been recorded in `report.md`.
 - Define debug trace schema.
 - Define proof trace step schema.
 - Add root-cause categories including quantifier, numeric, and fallback categories.
@@ -1050,10 +1061,12 @@ Tasks:
 
 Validation commands:
 
+- early LLM connectivity smoke command using sanitized `.env` config, or a clearly reported blocked live validation.
 - `python -m unittest tests/test_debug_trace.py`
 
 Completion criteria:
 
+- Early LLM connectivity is either validated live or reported as blocked with sanitized provider/network/config details.
 - Trace serializes without secrets.
 - Root-cause categories are test-covered.
 
@@ -1078,10 +1091,12 @@ Tasks:
 - Add frame repair loop.
 - Add frame cache by normalized text, prompt version, extractor version, and model.
 - Add mock frame extractor for tests.
+- Add a required credential-gated live parse-frame smoke test when `.env` has all required model settings.
 
 Validation commands:
 
 - `python -m unittest tests/test_llm_frame_extraction.py`
+- live parse-frame smoke command using the configured `.env` model, or a clearly reported blocked live validation.
 
 Completion criteria:
 
@@ -1089,6 +1104,7 @@ Completion criteria:
 - Invalid frame triggers repair.
 - Transient failures retry with backoff.
 - Runtime frame extractor input excludes reference-only fields.
+- Live parse-frame smoke succeeds when provider access is available, or the blocker is documented with sanitized details.
 
 Risks:
 

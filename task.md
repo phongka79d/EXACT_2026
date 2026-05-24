@@ -173,7 +173,7 @@ All later batches depend on a safe data boundary. If reference fields can reach 
 ### Explicit Non-Goals
 
 - Do not implement parse frames, ASTs, solver logic, numeric logic, API endpoint, or evaluation scoring.
-- Do not call the live LLM API.
+- Do not call the live LLM API for parse-frame extraction or answering in Batch 1; later batches may run credential-gated smoke checks as required by the global live LLM validation rule.
 - Do not use reference fields to improve runtime predictions.
 
 ### Completion Checklist
@@ -397,11 +397,11 @@ The project needs root-cause visibility. Later LLM, numeric, symbolic, fallback,
 
 ### Completion Checklist
 
-- [ ] Debug trace schema exists.
-- [ ] Proof trace schema exists.
-- [ ] Redaction tests pass.
-- [ ] Early LLM connectivity smoke is passed or honestly reported as blocked.
-- [ ] `report.md` contains Batch 4 result.
+- [x] Debug trace schema exists.
+- [x] Proof trace schema exists.
+- [x] Redaction tests pass.
+- [x] Early LLM connectivity smoke is passed or honestly reported as blocked.
+- [x] `report.md` contains Batch 4 result.
 
 ## Mandatory Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
 
@@ -1142,7 +1142,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
 - [x] Batch 2 - Cache Keys, Candidate Extraction, and Question Typing
 - [x] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
-- [ ] Batch 4 - Debug Trace and Proof Trace Infrastructure
+- [x] Batch 4 - Debug Trace and Proof Trace Infrastructure
 - [ ] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
 - [ ] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
 - [ ] Batch 7 - Numeric Layer with Source Provenance
@@ -1158,7 +1158,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M1 - Runtime-Safe Foundation
 - [x] M2 - Query Contract
 - [x] M3 - Logic Representation Contract
-- [ ] M4 - Observability Foundation
+- [x] M4 - Observability Foundation
 - [ ] M5 - LLM Semantic Parser
 - [ ] M6 - Async Runtime Skeleton
 - [ ] M7 - Numeric Reasoning Layer
@@ -1201,15 +1201,15 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B3-T9
 - [x] B3-T10
 - [x] B3-T11
-- [ ] B4-T1
-- [ ] B4-T2
-- [ ] B4-T3
-- [ ] B4-T4
-- [ ] B4-T5
-- [ ] B4-T6
-- [ ] B4-T7
-- [ ] B4-T8
-- [ ] B4-T9
+- [x] B4-T1
+- [x] B4-T2
+- [x] B4-T3
+- [x] B4-T4
+- [x] B4-T5
+- [x] B4-T6
+- [x] B4-T7
+- [x] B4-T8
+- [x] B4-T9
 - [ ] B5-T1
 - [ ] B5-T2
 - [ ] B5-T3

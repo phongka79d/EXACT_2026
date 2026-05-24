@@ -239,3 +239,91 @@
 ### Notes for Next Batch
 - Batch 4 can proceed with structured debug/proof trace models that now can reference stable frame/AST/compiler contracts.
 - Trace schemas in Batch 4 can safely rely on Batch 3 metadata fields (`source_id`, `source_text`, `premise_id`, `candidate_label`) now implemented and validated.
+
+## Batch 4 Execution Result - 2026-05-24
+
+### Completed Tasks
+- B4-T1: Complete.
+- B4-T2: Complete.
+- B4-T3: Complete.
+- B4-T4: Complete.
+- B4-T5: Complete.
+- B4-T6: Complete.
+- B4-T7: Complete.
+- B4-T8: Complete.
+- B4-T9: Complete.
+
+### Files Created or Modified
+- app/tracing/__init__.py
+- app/tracing/models.py
+- app/tracing/serialization.py
+- app/tracing/writers.py
+- scripts/smoke_test_llm_connectivity.py
+- tests/test_debug_trace.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- task.md (1047 lines): updated only to mark Batch 4 checklist/batch/milestone/task-ID progress.
+- report.md (271 lines): appended Batch 4 execution report section per required reporting template.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_debug_trace.py` - Passed.
+- `python -m unittest` - Passed.
+- `python scripts/smoke_test_llm_connectivity.py --env-path .env --timeout-seconds 20` - Blocked (`network_or_provider_unavailable`: `[WinError 10061] No connection could be made because the target machine actively refused it`), sanitized output only, no secrets logged.
+
+### Acceptance Criteria Check
+- Trace serialization is deterministic and secret-safe: Satisfied (sorted-key JSON/JSONL writing plus redaction tests).
+- Root-cause categories are stable and test-covered: Satisfied (`tests/test_debug_trace.py` validates required category coverage).
+- Trace objects can reference runtime IDs without containing gold answers or FOL: Satisfied (reference-only field guard rejects `premises-FOL`, `answer`, `explanation`, `idx`).
+- Live LLM connectivity tested from `.env` when available or blocker documented: Satisfied (live smoke attempted and blocked with sanitized provider/network detail).
+
+### Artifacts Produced
+- Batch 4 tracing package (`app/tracing`) with typed debug-trace and proof-trace schemas.
+- Root-cause category registry for pipeline-stage failure classification.
+- Secret-redacting trace serializer with runtime boundary guard for reference-only fields.
+- JSON and JSONL trace artifact writers.
+- Credential-gated early LLM connectivity smoke script (`scripts/smoke_test_llm_connectivity.py`).
+- Batch 4 test coverage (`tests/test_debug_trace.py`).
+
+### Checklist Update
+- Marked Batch 4 completion checklist items as complete in `task.md`.
+- Marked `Batch 4 - Debug Trace and Proof Trace Infrastructure` complete in the Progress Tracker.
+- Marked `M4 - Observability Foundation` complete in the Progress Tracker.
+- Marked task IDs `B4-T1` through `B4-T9` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Kept trace contracts as frozen dataclasses to align with earlier deterministic schema modules.
+- Enforced a strict trace boundary: any trace payload containing reference-only keys is rejected before artifact writes.
+- Centralized redaction using existing config redaction helpers so tracing behavior stays consistent with prior secret-handling logic.
+- Added a standalone smoke script with sanitized endpoint/model reporting and tiny runtime-safe prompt to satisfy early live validation without exposing credentials.
+
+### Risks or Open Issues
+- Live provider connectivity is currently blocked in this environment (`WinError 10061`), so only blocked-status evidence is available for the early smoke check until network/provider access is restored.
+- Inaccessible temporary directories remain in repository root (`tmpexub70qe`, `tmprpdk9dj7`), unchanged and outside Batch 4 scope.
+
+### Minor Issues Fixed During Execution
+- Fixed direct-script import resolution in `scripts/smoke_test_llm_connectivity.py` by prepending repository root to `sys.path`.
+- Replaced system-temp usage in new trace writer tests with a workspace-local temp directory to avoid known Windows temp permission issues.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed by serialization guards and tests.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed; smoke output is sanitized and trace serialization redacts sensitive keys.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 4 observability scope.
+- Required validations were run or blockers were reported honestly: Confirmed (tests passed; smoke blocker documented).
+
+### Notes for Next Batch
+- Batch 5 can consume the new trace schemas and artifact writers directly for parse-frame extraction diagnostics and failure reporting.
+- The early connectivity smoke command now exists and can be rerun whenever provider/network access is available.
+- Next batch can proceed, with awareness that live provider validation may remain blocked until endpoint/network access is restored.
+
+### Post-Batch Live Smoke Rerun - 2026-05-24
+- Command: `python scripts/smoke_test_llm_connectivity.py --env-path .env --timeout-seconds 20`
+- Result: Passed.
+- Sanitized endpoint: `https://api.shopaikey.com/v1/chat/completions`.
+- Model: `qwen2.5-7b-instruct`.
+- Response shape: `choices[0].message.content`.
+- Sample content preview: `{"ping":"pong"}`.
+- Secret handling: no API key, auth header, or raw `.env` value was printed or written.
+- Updated status: the earlier `network_or_provider_unavailable` blocker is resolved for this environment at rerun time.

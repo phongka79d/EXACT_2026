@@ -73,3 +73,76 @@
 - Batch 2 can proceed using the new runtime-safe data boundary and config primitives.
 - Candidate extraction and cache-key logic can now build directly on `LocalRuntimeSample` and existing loader outputs.
 
+## Batch 2 Execution Result - 2026-05-24
+
+### Completed Tasks
+- B2-T1: Complete.
+- B2-T2: Complete.
+- B2-T3: Complete.
+- B2-T4: Complete.
+- B2-T5: Complete.
+- B2-T6: Complete.
+- B2-T7: Complete.
+- B2-T8: Complete.
+- B2-T9: Complete.
+- B2-T10: Complete.
+
+### Files Created or Modified
+- app/cache/__init__.py
+- app/cache/keys.py
+- app/questions/__init__.py
+- app/questions/candidates.py
+- tests/test_cache_keys.py
+- tests/test_candidate_extraction.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- task.md (1031 lines): updated only to mark Batch 2 completion checklist, milestone, batch status, and task IDs.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_cache_keys.py` - Passed.
+- `python -m unittest tests/test_candidate_extraction.py` - Passed.
+- `python -m unittest tests/test_flatten_dataset.py` - Passed.
+- `python -m unittest tests/test_runtime_loader.py` - Passed.
+
+### Acceptance Criteria Check
+- Local and API premise cache keys are distinct and tested: Satisfied.
+- MCQ candidates are extracted without reading answer labels: Satisfied.
+- Numeric/open-ended classification is based on question text and candidate structure only: Satisfied.
+- Candidate objects preserve original source text and metadata (`label`, `source_id`, `source_text`, `question_type`): Satisfied.
+
+### Artifacts Produced
+- Cache key helpers for local (`record:<record_id>`) and API (`premises_hash:<hash>`) modes.
+- Premise normalization and hashing utilities preserving premise order.
+- Question classifier and candidate extractor for MCQ, Yes/No/Unknown, numeric, open-ended, and ambiguous forms.
+- Unit tests covering cache behavior, MCQ option parsing, ambiguous option formatting, and mixed question styles.
+
+### Checklist Update
+- Marked Batch 2 completion checklist items as complete in `task.md`.
+- Marked `Batch 2 - Cache Keys, Candidate Extraction, and Question Typing` complete in the Progress Tracker.
+- Marked `M2 - Query Contract` complete in the Progress Tracker.
+- Marked task IDs `B2-T1` through `B2-T10` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Enforced cache-key separation between local evaluation and API runtime via dedicated helpers instead of ad hoc key construction.
+- Kept premise hashing deterministic with explicit premise-order preservation and optional version components for forward compatibility.
+- Treated malformed MCQ labels as `ambiguous` while still preserving parsed candidate metadata for traceability.
+- Prioritized option-structure MCQ detection over linguistic cues to avoid accidental dependence on answer labels.
+
+### Risks or Open Issues
+- Inaccessible temporary directories remain in repository root (`tmpexub70qe`, `tmprpdk9dj7`), unchanged from prior work and outside Batch 2 scope.
+
+### Minor Issues Fixed During Execution
+- None.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed for all Batch 2 logic.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 2 scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 3 can proceed using the stable question-type/candidate contract and cache-key utilities.
+- Parse-frame and AST work can consume candidate labels/source metadata already emitted by `app/questions/candidates.py`.

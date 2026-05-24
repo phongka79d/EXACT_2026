@@ -246,10 +246,10 @@ The runtime must know what it is trying to verify before LLM parsing and solving
 
 ### Completion Checklist
 
-- [ ] Local/API cache key utilities exist.
-- [ ] Candidate extraction works for expected question types.
-- [ ] Tests prove no answer-label dependency.
-- [ ] `report.md` contains Batch 2 result.
+- [x] Local/API cache key utilities exist.
+- [x] Candidate extraction works for expected question types.
+- [x] Tests prove no answer-label dependency.
+- [x] `report.md` contains Batch 2 result.
 
 ## Mandatory Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
 
@@ -1126,7 +1126,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 ### Batches
 
 - [x] Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
-- [ ] Batch 2 - Cache Keys, Candidate Extraction, and Question Typing
+- [x] Batch 2 - Cache Keys, Candidate Extraction, and Question Typing
 - [ ] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
 - [ ] Batch 4 - Debug Trace and Proof Trace Infrastructure
 - [ ] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
@@ -1142,7 +1142,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 ### Milestones
 
 - [x] M1 - Runtime-Safe Foundation
-- [ ] M2 - Query Contract
+- [x] M2 - Query Contract
 - [ ] M3 - Logic Representation Contract
 - [ ] M4 - Observability Foundation
 - [ ] M5 - LLM Semantic Parser
@@ -1166,16 +1166,16 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B1-T7
 - [x] B1-T8
 - [x] B1-T9
-- [ ] B2-T1
-- [ ] B2-T2
-- [ ] B2-T3
-- [ ] B2-T4
-- [ ] B2-T5
-- [ ] B2-T6
-- [ ] B2-T7
-- [ ] B2-T8
-- [ ] B2-T9
-- [ ] B2-T10
+- [x] B2-T1
+- [x] B2-T2
+- [x] B2-T3
+- [x] B2-T4
+- [x] B2-T5
+- [x] B2-T6
+- [x] B2-T7
+- [x] B2-T8
+- [x] B2-T9
+- [x] B2-T10
 - [ ] B3-T1
 - [ ] B3-T2
 - [ ] B3-T3

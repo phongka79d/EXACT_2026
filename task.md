@@ -175,11 +175,11 @@ All later batches depend on a safe data boundary. If reference fields can reach 
 
 ### Completion Checklist
 
-- [ ] Config loader exists and redacts secrets.
-- [ ] Runtime-safe data models exist.
-- [ ] Reference-only fields are stripped before inference.
-- [ ] Sentinel leakage tests pass.
-- [ ] `report.md` contains Batch 1 result.
+- [x] Config loader exists and redacts secrets.
+- [x] Runtime-safe data models exist.
+- [x] Reference-only fields are stripped before inference.
+- [x] Sentinel leakage tests pass.
+- [x] `report.md` contains Batch 1 result.
 
 ## Mandatory Batch 2 - Cache Keys, Candidate Extraction, and Question Typing
 
@@ -1125,7 +1125,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 ### Batches
 
-- [ ] Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
+- [x] Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
 - [ ] Batch 2 - Cache Keys, Candidate Extraction, and Question Typing
 - [ ] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
 - [ ] Batch 4 - Debug Trace and Proof Trace Infrastructure
@@ -1141,7 +1141,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 ### Milestones
 
-- [ ] M1 - Runtime-Safe Foundation
+- [x] M1 - Runtime-Safe Foundation
 - [ ] M2 - Query Contract
 - [ ] M3 - Logic Representation Contract
 - [ ] M4 - Observability Foundation
@@ -1157,15 +1157,15 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 ### Task IDs
 
-- [ ] B1-T1
-- [ ] B1-T2
-- [ ] B1-T3
-- [ ] B1-T4
-- [ ] B1-T5
-- [ ] B1-T6
-- [ ] B1-T7
-- [ ] B1-T8
-- [ ] B1-T9
+- [x] B1-T1
+- [x] B1-T2
+- [x] B1-T3
+- [x] B1-T4
+- [x] B1-T5
+- [x] B1-T6
+- [x] B1-T7
+- [x] B1-T8
+- [x] B1-T9
 - [ ] B2-T1
 - [ ] B2-T2
 - [ ] B2-T3

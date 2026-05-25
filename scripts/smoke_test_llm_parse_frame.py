@@ -39,7 +39,7 @@ async def run_smoke(env_path: str | Path, timeout_seconds: float, max_attempts: 
         mode="premise",
         source_id="premise_0001",
         premise_id=1,
-        source_text="Mai has a cumulative GPA of 7.2.",
+        source_text="Student Alex has a cumulative GPA of 7.2.",
     )
 
     try:

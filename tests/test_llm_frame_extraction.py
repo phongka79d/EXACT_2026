@@ -147,6 +147,32 @@ class LLMFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(second.diagnostics["cache_hit"])
         self.assertEqual(len(client.calls), 1)
 
+    async def test_model_payload_normalization_is_reported_in_diagnostics(self):
+        underspecified_payload = {
+            "kind": "fact",
+            "entity": "Alex",
+            "facts": [{"attribute": "gpa", "value": 7.2}],
+            "source_id": "premise_0001",
+            "source_text": "Student Alex has a cumulative GPA of 7.2.",
+            "premise_id": 1,
+        }
+        client = _ScriptedClient([json.dumps(underspecified_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="Student Alex has a cumulative GPA of 7.2.",
+            )
+        )
+
+        self.assertTrue(result.diagnostics["normalization_applied"])
+        self.assertIn("normalization_warnings", result.diagnostics)
+        self.assertIn("warnings_defaulted", result.diagnostics["normalization_warnings"])
+        self.assertIn("slot_type_inferred:numeric_value", result.diagnostics["normalization_warnings"])
+
     def test_reference_only_fields_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "reference-only"):
             FrameExtractionInput(
@@ -169,4 +195,3 @@ class LLMFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

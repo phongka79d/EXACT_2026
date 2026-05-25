@@ -205,7 +205,7 @@ class LLMFrameExtractor:
 
             try:
                 payload = _parse_json_object(content)
-                payload = _normalize_model_payload(payload, request)
+                payload, normalization_warnings = _normalize_model_payload(payload, request)
                 frame = parse_frame(payload)
                 validate_parse_frame(frame)
             except (json.JSONDecodeError, ValueError) as exc:
@@ -248,6 +248,7 @@ class LLMFrameExtractor:
                     retry_count=total_retries,
                     cache_hit=False,
                     errors=errors,
+                    normalization_warnings=normalization_warnings,
                 ),
             )
 
@@ -297,7 +298,9 @@ class LLMFrameExtractor:
         cache_hit: bool,
         errors: list[str],
         failure_type: str | None = None,
+        normalization_warnings: list[str] | None = None,
     ) -> dict[str, Any]:
+        normalized_warnings = sorted(set(normalization_warnings or []))
         diagnostics: dict[str, Any] = {
             "model": self._client.model,
             "prompt_version": self._prompt_version,
@@ -308,6 +311,8 @@ class LLMFrameExtractor:
             "cache_hit": cache_hit,
             "errors": list(errors),
             "endpoint": self._client.sanitized_endpoint,
+            "normalization_applied": bool(normalized_warnings),
+            "normalization_warnings": normalized_warnings,
         }
         if failure_type is not None:
             diagnostics["failure_type"] = failure_type
@@ -458,59 +463,105 @@ def _extract_first_json_object(content: str) -> str | None:
     return None
 
 
-def _normalize_model_payload(payload: dict[str, Any], request: FrameExtractionInput) -> dict[str, Any]:
+def _normalize_model_payload(payload: dict[str, Any], request: FrameExtractionInput) -> tuple[dict[str, Any], list[str]]:
+    normalization_warnings: list[str] = []
     normalized = dict(payload)
     frame_payload = normalized.get("frame")
     if isinstance(frame_payload, Mapping):
         normalized = dict(frame_payload)
+        _add_normalization_warning(normalization_warnings, "frame_wrapper_unwrapped")
 
     if "if_slots" in normalized and "if" not in normalized:
         normalized["if"] = normalized.pop("if_slots")
+        _add_normalization_warning(normalization_warnings, "if_slots_renamed")
     if "then_slots" in normalized and "then" not in normalized:
         normalized["then"] = normalized.pop("then_slots")
+        _add_normalization_warning(normalization_warnings, "then_slots_renamed")
 
     kind = normalized.get("kind")
     if not isinstance(kind, str) or not kind.strip():
         if "facts" in normalized:
             normalized["kind"] = "fact"
+            _add_normalization_warning(normalization_warnings, "kind_inferred:fact")
         elif "if" in normalized and "then" in normalized:
             normalized["kind"] = "rule"
+            _add_normalization_warning(normalization_warnings, "kind_inferred:rule")
         elif "claim" in normalized:
             normalized["kind"] = "claim"
+            _add_normalization_warning(normalization_warnings, "kind_inferred:claim")
 
     if not isinstance(normalized.get("warnings"), list):
         normalized["warnings"] = []
+        _add_normalization_warning(normalization_warnings, "warnings_defaulted")
 
     if request.mode == "premise":
-        normalized.setdefault("source_id", request.source_id)
-        normalized.setdefault("source_text", request.source_text)
-        normalized.setdefault("premise_id", request.premise_id)
+        if "source_id" not in normalized:
+            normalized["source_id"] = request.source_id
+            _add_normalization_warning(normalization_warnings, "source_id_defaulted")
+        if "source_text" not in normalized:
+            normalized["source_text"] = request.source_text
+            _add_normalization_warning(normalization_warnings, "source_text_defaulted")
+        if "premise_id" not in normalized:
+            normalized["premise_id"] = request.premise_id
+            _add_normalization_warning(normalization_warnings, "premise_id_defaulted")
     else:
-        normalized.setdefault("source_id", request.source_id)
-        normalized.setdefault("source_text", request.source_text)
-        normalized.setdefault("candidate_label", request.candidate_label)
+        if "source_id" not in normalized:
+            normalized["source_id"] = request.source_id
+            _add_normalization_warning(normalization_warnings, "source_id_defaulted")
+        if "source_text" not in normalized:
+            normalized["source_text"] = request.source_text
+            _add_normalization_warning(normalization_warnings, "source_text_defaulted")
+        if "candidate_label" not in normalized:
+            normalized["candidate_label"] = request.candidate_label
+            _add_normalization_warning(normalization_warnings, "candidate_label_defaulted")
 
     default_entity = normalized.get("entity")
 
     kind_text = normalized.get("kind")
     if kind_text == "fact":
-        normalized["facts"] = _normalize_slot_collection(normalized.get("facts"), default_entity=default_entity)
+        normalized["facts"] = _normalize_slot_collection(
+            normalized.get("facts"),
+            default_entity=default_entity,
+            normalization_warnings=normalization_warnings,
+        )
     elif kind_text == "rule":
-        normalized["if"] = _normalize_slot_collection(normalized.get("if"), default_entity=default_entity)
-        normalized["then"] = _normalize_slot_collection(normalized.get("then"), default_entity=default_entity)
-        normalized.setdefault("scope", "entities")
+        normalized["if"] = _normalize_slot_collection(
+            normalized.get("if"),
+            default_entity=default_entity,
+            normalization_warnings=normalization_warnings,
+        )
+        normalized["then"] = _normalize_slot_collection(
+            normalized.get("then"),
+            default_entity=default_entity,
+            normalization_warnings=normalization_warnings,
+        )
+        if "scope" not in normalized:
+            normalized["scope"] = "entities"
+            _add_normalization_warning(normalization_warnings, "scope_defaulted")
     elif kind_text == "claim":
         claim_value = normalized.get("claim")
         if isinstance(claim_value, Mapping):
-            normalized["claim"] = _normalize_slot(dict(claim_value), default_entity=default_entity)
-        normalized.setdefault("answer_type", "claim")
+            normalized["claim"] = _normalize_slot(
+                dict(claim_value),
+                default_entity=default_entity,
+                normalization_warnings=normalization_warnings,
+            )
+        if "answer_type" not in normalized:
+            normalized["answer_type"] = "claim"
+            _add_normalization_warning(normalization_warnings, "answer_type_defaulted")
 
-    return normalized
+    return normalized, normalization_warnings
 
 
-def _normalize_slot_collection(value: Any, *, default_entity: Any) -> list[Any]:
+def _normalize_slot_collection(
+    value: Any,
+    *,
+    default_entity: Any,
+    normalization_warnings: list[str],
+) -> list[Any]:
     if isinstance(value, Mapping):
         items = [value]
+        _add_normalization_warning(normalization_warnings, "slot_collection_wrapped")
     elif isinstance(value, list):
         items = value
     else:
@@ -519,36 +570,61 @@ def _normalize_slot_collection(value: Any, *, default_entity: Any) -> list[Any]:
     normalized_items: list[Any] = []
     for item in items:
         if isinstance(item, Mapping):
-            normalized_items.append(_normalize_slot(dict(item), default_entity=default_entity))
+            normalized_items.append(
+                _normalize_slot(
+                    dict(item),
+                    default_entity=default_entity,
+                    normalization_warnings=normalization_warnings,
+                )
+            )
         else:
             normalized_items.append(item)
     return normalized_items
 
 
-def _normalize_slot(slot: dict[str, Any], *, default_entity: Any) -> dict[str, Any]:
+def _normalize_slot(
+    slot: dict[str, Any],
+    *,
+    default_entity: Any,
+    normalization_warnings: list[str],
+) -> dict[str, Any]:
     normalized = dict(slot)
 
     slot_type = normalized.get("type")
     if not isinstance(slot_type, str) or not slot_type.strip():
-        normalized["type"] = _infer_slot_type(normalized)
+        inferred_type = _infer_slot_type(normalized)
+        normalized["type"] = inferred_type
+        _add_normalization_warning(normalization_warnings, f"slot_type_inferred:{inferred_type or 'unknown'}")
         slot_type = normalized.get("type")
 
     if normalized.get("type") == "predicate" and "entity" not in normalized and isinstance(default_entity, str):
         normalized["entity"] = default_entity
+        _add_normalization_warning(normalization_warnings, "slot_entity_defaulted")
 
     if normalized.get("type") in {"numeric_condition", "numeric_value"}:
         if "entity" not in normalized and isinstance(default_entity, str):
             normalized["entity"] = default_entity
+            _add_normalization_warning(normalization_warnings, "slot_entity_defaulted")
 
     expression = normalized.get("expression")
     if isinstance(expression, Mapping):
-        normalized["expression"] = _normalize_slot(dict(expression), default_entity=default_entity)
+        normalized["expression"] = _normalize_slot(
+            dict(expression),
+            default_entity=default_entity,
+            normalization_warnings=normalization_warnings,
+        )
 
     operands = normalized.get("operands")
     if normalized.get("type") == "arithmetic_expression" and isinstance(operands, Mapping):
         normalized["operands"] = [operands]
+        _add_normalization_warning(normalization_warnings, "arithmetic_operands_wrapped")
 
     return normalized
+
+
+def _add_normalization_warning(warnings: list[str], warning: str) -> None:
+    if warning and warning not in warnings:
+        warnings.append(warning)
 
 
 def _infer_slot_type(slot: Mapping[str, Any]) -> str:

@@ -1025,11 +1025,11 @@ Batch 8 solver proof steps currently preserve logical derivations and premise ID
 
 ### Completion Checklist
 
-- [ ] Solver proof citations include source text where available.
-- [ ] Missing source text warnings are trace-visible.
-- [ ] Citation safety tests pass.
-- [ ] Entailment and answer behavior remain unchanged.
-- [ ] `report.md` contains Batch 9.5 result.
+- [x] Solver proof citations include source text where available.
+- [x] Missing source text warnings are trace-visible.
+- [x] Citation safety tests pass.
+- [x] Entailment and answer behavior remain unchanged.
+- [x] `report.md` contains Batch 9.5 result.
 
 ## Mandatory Batch 9.6 - Proof Trace Explanation Readiness
 
@@ -1098,11 +1098,11 @@ Explanation quality is a scoring dimension. Before building the public output la
 
 ### Completion Checklist
 
-- [ ] Explanation-ready proof-trace contract exists.
-- [ ] Route, numeric, citation, and decision details are represented.
-- [ ] Trace ordering is deterministic.
-- [ ] Runtime safety tests pass.
-- [ ] `report.md` contains Batch 9.6 result.
+- [x] Explanation-ready proof-trace contract exists.
+- [x] Route, numeric, citation, and decision details are represented.
+- [x] Trace ordering is deterministic.
+- [x] Runtime safety tests pass.
+- [x] `report.md` contains Batch 9.6 result.
 
 ## Mandatory Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 
@@ -1480,8 +1480,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 8.5 - Numeric Layer Modularization and Maintainability
 - [x] Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
 - [x] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
-- [ ] Batch 9.5 - Solver Citation Source-Text Enrichment
-- [ ] Batch 9.6 - Proof Trace Explanation Readiness
+- [x] Batch 9.5 - Solver Citation Source-Text Enrichment
+- [x] Batch 9.6 - Proof Trace Explanation Readiness
 - [ ] Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 - [ ] Batch 11 - API Endpoint
 - [ ] Batch 12 - Evaluation, Scoring, and Error Analysis
@@ -1500,8 +1500,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M8.5 - Numeric Layer Maintainability
 - [x] M8.6 - LLM Parser Prompt Hardening
 - [x] M9 - Extended Verification
-- [ ] M9.5 - Solver Citation Enrichment
-- [ ] M9.6 - Proof Trace Explanation Readiness
+- [x] M9.5 - Solver Citation Enrichment
+- [x] M9.6 - Proof Trace Explanation Readiness
 - [ ] M10 - Public Output Layer
 - [ ] M11 - Submission API
 - [ ] M12 - Evaluation Loop
@@ -1626,22 +1626,22 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B9-T9
 - [x] B9-T10
 - [x] B9-T11
-- [ ] B9.5-T1
-- [ ] B9.5-T2
-- [ ] B9.5-T3
-- [ ] B9.5-T4
-- [ ] B9.5-T5
-- [ ] B9.5-T6
-- [ ] B9.5-T7
-- [ ] B9.5-T8
-- [ ] B9.6-T1
-- [ ] B9.6-T2
-- [ ] B9.6-T3
-- [ ] B9.6-T4
-- [ ] B9.6-T5
-- [ ] B9.6-T6
-- [ ] B9.6-T7
-- [ ] B9.6-T8
+- [x] B9.5-T1
+- [x] B9.5-T2
+- [x] B9.5-T3
+- [x] B9.5-T4
+- [x] B9.5-T5
+- [x] B9.5-T6
+- [x] B9.5-T7
+- [x] B9.5-T8
+- [x] B9.6-T1
+- [x] B9.6-T2
+- [x] B9.6-T3
+- [x] B9.6-T4
+- [x] B9.6-T5
+- [x] B9.6-T6
+- [x] B9.6-T7
+- [x] B9.6-T8
 - [ ] B10-T1
 - [ ] B10-T2
 - [ ] B10-T3

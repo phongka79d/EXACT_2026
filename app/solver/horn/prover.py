@@ -191,14 +191,27 @@ def _extract_from_premise(
     rules: list[HornRule] = []
     facts: list[tuple[HornLiteral, int | None]] = []
     source_id = getattr(premise, "source_id", None)
+    source_text = getattr(premise, "source_text", None)
     premise_id = getattr(premise, "premise_id", None)
+    candidate_label = getattr(premise, "candidate_label", None)
 
     def add_fact(node: LogicNode) -> None:
         literal = _literal_from_node(node)
         if literal is None:
             unsupported_features.append("unsupported_non_literal_fact")
             return
-        facts.append((replace(literal, source_id=source_id, premise_id=premise_id), premise_id))
+        facts.append(
+            (
+                replace(
+                    literal,
+                    source_id=source_id,
+                    source_text=source_text,
+                    premise_id=premise_id,
+                    candidate_label=candidate_label,
+                ),
+                premise_id,
+            )
+        )
 
     def add_rule(node: ImpliesNode) -> None:
         antecedents = _literals_from_antecedent(node.if_node)
@@ -207,8 +220,23 @@ def _extract_from_premise(
             unsupported_features.append("unsupported_non_horn_rule")
             return
         rule = HornRule(
-            antecedents=tuple(replace(item, source_id=source_id, premise_id=premise_id) for item in antecedents),
-            consequent=replace(consequent, source_id=source_id, premise_id=premise_id),
+            antecedents=tuple(
+                replace(
+                    item,
+                    source_id=source_id,
+                    source_text=source_text,
+                    premise_id=premise_id,
+                    candidate_label=candidate_label,
+                )
+                for item in antecedents
+            ),
+            consequent=replace(
+                consequent,
+                source_id=source_id,
+                source_text=source_text,
+                premise_id=premise_id,
+                candidate_label=candidate_label,
+            ),
             source_id=source_id,
             premise_id=premise_id,
             derived_from_contraposition=False,
@@ -284,13 +312,22 @@ def _literal_from_node(node: LogicNode) -> HornLiteral | None:
             arguments=tuple(arguments),
             negated=False,
             source_id=node.source_id,
+            source_text=node.source_text,
             premise_id=node.premise_id,
+            candidate_label=node.candidate_label,
         )
     if isinstance(node, NotNode) and isinstance(node.body, PredNode):
         base = _literal_from_node(node.body)
         if base is None:
             return None
-        return replace(base, negated=True, source_id=node.source_id, premise_id=node.premise_id)
+        return replace(
+            base,
+            negated=True,
+            source_id=node.source_id,
+            source_text=node.source_text,
+            premise_id=node.premise_id,
+            candidate_label=node.candidate_label,
+        )
     return None
 
 

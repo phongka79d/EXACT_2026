@@ -1,5 +1,6 @@
 """Tracing contracts and artifact writers for debug and proof visibility."""
 
+from .citations import CitationRegistry, CitationResolution, build_source_registry
 from .models import (
     REFERENCE_ONLY_TRACE_KEYS,
     ROOT_CAUSE_CATEGORIES,
@@ -24,6 +25,8 @@ from .writers import (
 )
 
 __all__ = [
+    "CitationRegistry",
+    "CitationResolution",
     "REFERENCE_ONLY_TRACE_KEYS",
     "ROOT_CAUSE_CATEGORIES",
     "CacheMetadata",
@@ -32,6 +35,7 @@ __all__ = [
     "ProofTraceStep",
     "SourceCitation",
     "TraceStage",
+    "build_source_registry",
     "assert_runtime_safe_trace_payload",
     "serialize_debug_trace",
     "serialize_proof_trace_step",
@@ -41,4 +45,3 @@ __all__ = [
     "write_trace_payload_json",
     "write_trace_payload_jsonl",
 ]
-

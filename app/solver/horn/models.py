@@ -23,7 +23,9 @@ class HornLiteral:
     arguments: tuple[HornTerm, ...]
     negated: bool = False
     source_id: str | None = field(default=None, compare=False)
+    source_text: str | None = field(default=None, compare=False)
     premise_id: int | None = field(default=None, compare=False)
+    candidate_label: str | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if not self.predicate.strip():

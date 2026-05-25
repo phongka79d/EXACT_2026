@@ -196,6 +196,40 @@ class AsyncPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(premise_stage.metadata["frame_errors"], ["`type` must be a non-empty string"])
         self.assertNotIn("api_key", premise_stage.metadata)
 
+    async def test_solver_proof_steps_include_source_text_and_candidate_citations(self):
+        extractor = _ScriptedFrameExtractor()
+        pipeline = AsyncRuntimePipeline(frame_extractor=extractor, max_concurrency=1, request_timeout_seconds=1.0, sample_timeout_seconds=2.0)
+        query = RuntimeQuery.from_mapping({"premises-NL": ["Mai is eligible."], "question": "Is Mai eligible?"})
+
+        result = await pipeline.process_runtime_query(query)
+
+        self.assertEqual(result.status, "ok")
+        claim_step = next(step for step in result.trace.proof_trace if step.step_id == "solver_claim_claim")
+        self.assertTrue(any(citation.premise_id == 1 and citation.source_text == "Mai is eligible." for citation in claim_step.citations))
+        self.assertTrue(any(citation.candidate_label == "claim" and citation.source_text == "Is Mai eligible?" for citation in claim_step.citations))
+        self.assertFalse(any("citation_missing_source_text" in warning for warning in claim_step.warnings))
+        self.assertIn("route_details", claim_step.metadata)
+        self.assertEqual(claim_step.metadata["route_details"]["route_label"], "horn")
+
+    async def test_decision_step_includes_claim_and_unknown_details(self):
+        extractor = _ScriptedFrameExtractor()
+        pipeline = AsyncRuntimePipeline(frame_extractor=extractor, max_concurrency=1, request_timeout_seconds=1.0, sample_timeout_seconds=2.0)
+        query = RuntimeQuery.from_mapping(
+            {
+                "premises-NL": ["Mai is eligible."],
+                "question": "Choose one:\nA. Mai is eligible.\nB. Mai is not eligible.",
+            }
+        )
+
+        result = await pipeline.process_runtime_query(query)
+
+        decision_step = next(step for step in result.trace.proof_trace if step.step_id == "answer_decision")
+        decision_details = decision_step.metadata["decision_details"]
+        self.assertEqual("mcq", decision_details["question_type"])
+        self.assertEqual("Unknown", decision_details["selected_answer"])
+        self.assertEqual("mcq_multiple_provable_options", decision_details["unknown_reason"])
+        self.assertEqual(2, len(decision_details["candidate_outcomes"]))
+
     async def test_artifacts_are_written_for_partial_and_failed_results(self):
         extractor = _ScriptedFrameExtractor(fail_source_ids={"question"})
         pipeline = AsyncRuntimePipeline(frame_extractor=extractor, max_concurrency=2, request_timeout_seconds=1.0, sample_timeout_seconds=2.0)

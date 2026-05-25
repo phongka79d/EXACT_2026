@@ -1000,3 +1000,162 @@
 ### Notes for Next Batch
 - Batch 9.5 can proceed and enrich citation/source-text metadata across Horn, Z3, unsupported-route, and fallback proof steps without changing answer-decision semantics.
 - Next batch should consume the new solver route metadata already present in pipeline traces (`primary_route`, `route_counts`, `z3_statuses`, `fallback_used_count`, `confidence_penalties`).
+
+## Batch 9.5 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B9.5-T1: Complete.
+- B9.5-T2: Complete.
+- B9.5-T3: Complete.
+- B9.5-T4: Complete.
+- B9.5-T5: Complete.
+- B9.5-T6: Complete.
+- B9.5-T7: Complete.
+- B9.5-T8: Complete.
+
+### Files Created or Modified
+- app/tracing/citations.py
+- app/tracing/__init__.py
+- app/solver/horn/models.py
+- app/solver/horn/prover.py
+- app/pipeline/runtime.py
+- tests/test_solver_citations.py
+- tests/test_async_pipeline.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/solver/horn/prover.py (377 lines): existing Horn prover updated to preserve source metadata on literals/rules/derivations for citation enrichment without changing entailment semantics.
+- app/pipeline/runtime.py (844 lines): existing async pipeline updated to build a deterministic citation registry and enrich solver proof-step citations/warnings across routes.
+- tests/test_async_pipeline.py (245 lines): existing async pipeline regression suite expanded with citation/source-text coverage.
+- task.md (1750 lines): updated only to mark Batch 9.5 checklist, batch/milestone status, and task IDs complete.
+- report.md (1002 lines before this append): shared append-only execution report file.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_solver_citations.py tests/test_async_pipeline.py tests/test_horn_solver.py tests/test_solver_routing.py tests/test_semantic_fallback.py tests/test_z3_adapter.py tests/test_debug_trace.py` - Passed.
+- `python -m unittest` - Passed (104 tests).
+
+### Acceptance Criteria Check
+- Public explanation code can read source text from proof-trace citations without re-reading runtime inputs ad hoc: Satisfied (solver proof steps now carry resolved `SourceCitation` entries with source text when available).
+- Solver citations preserve premise ID, candidate label, route, and source text where available: Satisfied.
+- Missing citation source text is explicit and trace-visible: Satisfied (`citation_missing_source_text:*` and `citation_unresolved_source:*` warnings emitted deterministically).
+- No reference-only training annotations or secrets can enter citations: Satisfied (citations are built only from runtime AST metadata and continue to pass runtime-safety trace serialization tests).
+
+### Artifacts Produced
+- New deterministic citation resolver/registry:
+  - `app/tracing/citations.py`
+- Pipeline citation enrichment integration for solver proof steps:
+  - `app/pipeline/runtime.py`
+- Horn literal metadata preservation for source text/candidate label propagation:
+  - `app/solver/horn/models.py`
+  - `app/solver/horn/prover.py`
+- New citation-focused regression tests:
+  - `tests/test_solver_citations.py`
+  - `tests/test_async_pipeline.py` (additional proof-step citation assertions)
+
+### Checklist Update
+- Marked Batch 9.5 completion checklist items complete in `task.md`.
+- Marked `Batch 9.5 - Solver Citation Source-Text Enrichment` complete in the Progress Tracker.
+- Marked `M9.5 - Solver Citation Enrichment` complete in the Progress Tracker.
+- Marked task IDs `B9.5-T1` through `B9.5-T8` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Implemented citation enrichment as a deterministic registry (`build_source_registry`) from premise/candidate AST metadata instead of ad hoc step-local string assembly.
+- Kept entailment/decision logic unchanged; citation work is trace-layer enrichment only.
+- Added explicit citation warnings for unresolved or source-text-missing references so downstream explanation rendering can detect evidence quality gaps instead of seeing silent empty citations.
+- Preserved existing redaction/runtime-safety guard flow by continuing to serialize proof/debug traces through the trace serialization layer.
+
+### Risks or Open Issues
+- Citation completeness depends on upstream AST metadata quality. If future parsers omit source metadata, warnings are now explicit but resolution quality will degrade until upstream metadata is restored.
+- Inaccessible temporary directories in repository root (`tmpexub70qe`, `tmprpdk9dj7`) remain unchanged and outside Batch 9.5 scope.
+
+### Minor Issues Fixed During Execution
+- Added missing source metadata propagation to Horn literals derived from AST nodes so proof citations can carry source text consistently.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 9.5 citation-enrichment scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 9.6 can now consume richer proof-step citations (`source_text`, `premise_id`, `candidate_label`) and explicit citation warnings to build explanation-ready proof trace ordering/formatting.
+- Next batch can proceed without changing solver truth-value behavior.
+
+## Batch 9.6 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B9.6-T1: Complete.
+- B9.6-T2: Complete.
+- B9.6-T3: Complete.
+- B9.6-T4: Complete.
+- B9.6-T5: Complete.
+- B9.6-T6: Complete.
+- B9.6-T7: Complete.
+- B9.6-T8: Complete.
+
+### Files Created or Modified
+- app/output/proof_trace.py
+- app/output/__init__.py
+- app/pipeline/runtime.py
+- tests/test_proof_trace_readiness.py
+- tests/test_async_pipeline.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/pipeline/runtime.py (917 lines): existing runtime pipeline file extended with structured route/decision proof-step metadata while preserving solver truth-value behavior.
+- app/output/proof_trace.py (216 lines): new explanation-ready proof-trace contract/helper with deterministic ordering and runtime-safety guard.
+- tests/test_async_pipeline.py (225 lines): existing async pipeline regression suite updated with proof-step route and decision-detail assertions.
+- task.md (1337 lines): updated only to mark Batch 9.6 checklist, batch/milestone status, and task IDs complete.
+- report.md (915 lines before this append): shared append-only execution report file.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_proof_trace_readiness.py` - Passed.
+- `python -m unittest tests/test_debug_trace.py` - Passed.
+- `python -m unittest` - Passed (107 tests).
+
+### Acceptance Criteria Check
+- Batch 10 can render public explanations from proof traces without inventing reasoning: Satisfied (new explanation-ready trace helper exposes ordered solver/numeric/decision evidence).
+- Proof traces include enough structured evidence for numeric, symbolic, fallback, and `Unknown` cases: Satisfied.
+- Trace ordering is deterministic: Satisfied (`trace_step_XXXX_*` stable IDs + ordered step list).
+- Reference-only and secret-safety guards still pass: Satisfied (runtime-safety tests + full suite pass).
+
+### Artifacts Produced
+- New explanation-ready proof-trace contract/helper:
+  - `app/output/proof_trace.py`
+- Runtime proof-step metadata enrichment for route-specific, numeric, and decision details:
+  - `app/pipeline/runtime.py`
+- New readiness and safety tests:
+  - `tests/test_proof_trace_readiness.py`
+  - `tests/test_async_pipeline.py` (additional assertions)
+
+### Checklist Update
+- Marked Batch 9.6 completion checklist items complete in `task.md`.
+- Marked `Batch 9.6 - Proof Trace Explanation Readiness` complete in the Progress Tracker.
+- Marked `M9.6 - Proof Trace Explanation Readiness` complete in the Progress Tracker.
+- Marked task IDs `B9.6-T1` through `B9.6-T8` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Added an output-layer helper (`build_explanation_ready_trace`) to transform raw proof steps into renderer-ready ordered sections without introducing Batch 10 formatting behavior.
+- Kept solver truth values unchanged and enriched proof-step metadata only (route details, derivation methods, decision outcomes, and Unknown reason classification).
+- Preserved runtime-safety boundaries by validating the explanation-ready payload with existing reference-field guards.
+
+### Risks or Open Issues
+- Explanation rendering itself is intentionally deferred to Batch 10; this batch only guarantees proof-trace readiness and structure.
+- Pre-existing inaccessible temporary directories in repository root (`tmpexub70qe`, `tmprpdk9dj7`) remain unchanged and outside Batch 9.6 scope.
+
+### Minor Issues Fixed During Execution
+- Added computed-value metadata on numeric proof steps so explanation-ready views can cite value/unit/expression/source directly without re-deriving numeric outputs.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 9.6 proof-trace-readiness scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 10 can consume `build_explanation_ready_trace` and new decision/route metadata to render public explanations from proof traces without adding ad hoc solver-specific logic.
+- Next batch can proceed without changing solver truth-value semantics.

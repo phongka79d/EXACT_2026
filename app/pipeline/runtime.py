@@ -20,7 +20,16 @@ from app.numeric import NumericLayerResult, build_numeric_layer
 from app.output.decision import CandidateEntailment, decide_answer
 from app.questions import extract_candidates
 from app.solver import SolverRequest, prove_entailment
-from app.tracing import CacheMetadata, DebugTrace, NumericDerivation, ProofTraceStep, SourceCitation, TraceStage
+from app.tracing import (
+    CacheMetadata,
+    CitationRegistry,
+    DebugTrace,
+    NumericDerivation,
+    ProofTraceStep,
+    SourceCitation,
+    TraceStage,
+    build_source_registry,
+)
 
 from .models import PipelineSampleResult
 
@@ -213,6 +222,8 @@ class AsyncRuntimePipeline:
                 stages=stages,
             )
 
+        citation_registry = build_source_registry(premise_bundle.asts, candidate_asts)
+
         entailments, solver_stage = self._run_symbolic_solver(
             premise_bundle.asts,
             candidate_result,
@@ -283,8 +294,13 @@ class AsyncRuntimePipeline:
             ),
             proof_trace=[
                 self._build_numeric_proof_step(numeric_result),
-                *self._build_solver_proof_steps(entailments),
-                self._build_decision_proof_step(candidate_result.question_type, decision_result.answer, decision_result),
+                *self._build_solver_proof_steps(entailments, candidate_asts, citation_registry),
+                self._build_decision_proof_step(
+                    candidate_result.question_type,
+                    decision_result.answer,
+                    decision_result,
+                    entailments,
+                ),
             ],
             metadata={
                 "question_type": candidate_result.question_type,
@@ -351,6 +367,7 @@ class AsyncRuntimePipeline:
         numeric_derivations: list[NumericDerivation] = []
         citations: list[SourceCitation] = []
         seen_citations: set[tuple[str, int | None, str | None]] = set()
+        computed_values: list[dict[str, Any]] = []
 
         for fact in numeric_result.derived_facts:
             sources: list[SourceCitation] = []
@@ -378,6 +395,23 @@ class AsyncRuntimePipeline:
                     sources=sources,
                 )
             )
+            computed_values.append(
+                {
+                    "name": fact.name,
+                    "value": rendered_value,
+                    "unit": fact.unit,
+                    "expression": fact.expression,
+                    "sources": [
+                        {
+                            "source_id": source.source_id,
+                            "source_text": source.source_text,
+                            "premise_id": source.premise_id,
+                            "candidate_label": source.candidate_label,
+                        }
+                        for source in sources
+                    ],
+                }
+            )
 
         proof_status: Literal["ok", "failed", "partial"] = "ok"
         if numeric_result.z3_constraints or numeric_result.conflicts or numeric_result.warnings:
@@ -404,6 +438,7 @@ class AsyncRuntimePipeline:
                 "comparison_count": len(numeric_result.comparisons),
                 "z3_constraint_count": len(numeric_result.z3_constraints),
                 "conflict_count": len(numeric_result.conflicts),
+                "computed_values": computed_values,
             },
         )
 
@@ -488,50 +523,92 @@ class AsyncRuntimePipeline:
             },
         )
 
-    def _build_solver_proof_steps(self, entailments: Sequence[CandidateEntailment]) -> list[ProofTraceStep]:
+    def _build_solver_proof_steps(
+        self,
+        entailments: Sequence[CandidateEntailment],
+        candidate_asts: Sequence[LogicNode],
+        citation_registry: CitationRegistry,
+    ) -> list[ProofTraceStep]:
         steps: list[ProofTraceStep] = []
-        for entailment in entailments:
+        for entailment, candidate_ast in zip(entailments, candidate_asts, strict=True):
+            candidate_source_id = getattr(candidate_ast, "source_id", None)
             claim_step = self._build_single_solver_step(
                 step_id=f"solver_claim_{entailment.label}",
                 action="prove_claim",
                 result=entailment.claim_result,
                 candidate_label=entailment.label,
+                candidate_source_id=candidate_source_id,
+                citation_registry=citation_registry,
             )
             negated_step = self._build_single_solver_step(
                 step_id=f"solver_negated_claim_{entailment.label}",
                 action="prove_negated_claim",
                 result=entailment.negated_claim_result,
                 candidate_label=entailment.label,
+                candidate_source_id=candidate_source_id,
+                citation_registry=citation_registry,
             )
             steps.extend([claim_step, negated_step])
         return steps
 
-    def _build_single_solver_step(self, *, step_id: str, action: str, result, candidate_label: str) -> ProofTraceStep:
+    def _build_single_solver_step(
+        self,
+        *,
+        step_id: str,
+        action: str,
+        result,
+        candidate_label: str,
+        candidate_source_id: str | None,
+        citation_registry: CitationRegistry,
+    ) -> ProofTraceStep:
         citations: list[SourceCitation] = []
         seen: set[tuple[str, int | None, str | None]] = set()
         derived_strings: list[str] = []
+        premise_facts: list[str] = []
+        derivation_methods: list[str] = []
+        citation_warnings: list[str] = []
+
+        def add_citation(citation: SourceCitation | None) -> None:
+            if citation is None:
+                return
+            key = (citation.source_id, citation.premise_id, citation.candidate_label)
+            if key in seen:
+                return
+            seen.add(key)
+            citations.append(citation)
+
         for derivation in result.derived_facts:
             rendered = derivation.literal.render()
             if derivation.rule_text:
                 rendered = f"{rendered} [{derivation.rule_text}]"
             derived_strings.append(rendered)
-            source_id = derivation.literal.source_id or f"candidate_{candidate_label}"
-            key = (source_id, derivation.literal.premise_id, candidate_label)
-            if key in seen:
-                continue
-            seen.add(key)
-            citations.append(
-                SourceCitation(
-                    source_id=source_id,
-                    source_text=None,
-                    premise_id=derivation.literal.premise_id,
-                    candidate_label=candidate_label,
-                )
+            derivation_methods.append(derivation.method)
+            if derivation.method == "premise_fact":
+                premise_facts.append(rendered)
+
+            resolved = citation_registry.resolve(
+                source_id=derivation.literal.source_id or candidate_source_id,
+                premise_id=derivation.literal.premise_id,
+                candidate_label=derivation.literal.candidate_label or candidate_label,
             )
+            add_citation(resolved.citation)
+            citation_warnings.extend(resolved.warnings)
+
+        premise_citations, premise_warnings = citation_registry.resolve_premise_ids(result.used_premise_ids)
+        for citation in premise_citations:
+            add_citation(citation)
+        citation_warnings.extend(premise_warnings)
+
+        candidate_citation = citation_registry.resolve(
+            source_id=candidate_source_id,
+            candidate_label=candidate_label,
+        )
+        add_citation(candidate_citation.citation)
+        citation_warnings.extend(candidate_citation.warnings)
 
         status: Literal["ok", "partial"] = "ok"
-        warnings = [*result.warnings, *result.unsupported_features]
-        if result.status != "ok":
+        warnings = [*result.warnings, *result.unsupported_features, *_unique_strings(citation_warnings)]
+        if result.status != "ok" or bool(citation_warnings):
             status = "partial"
         return ProofTraceStep(
             step_id=step_id,
@@ -550,19 +627,39 @@ class AsyncRuntimePipeline:
                 "z3_status": result.solver_metadata.get("z3_status"),
                 "fallback_used": bool(result.solver_metadata.get("fallback_used")),
                 "original_route": result.solver_metadata.get("original_route"),
+                "citation_count": len(citations),
+                "citation_warning_count": len(_unique_strings(citation_warnings)),
+                "derivation_methods": sorted(set(derivation_methods)),
+                "premise_facts": premise_facts,
+                "route_details": _build_solver_route_details(result, derivation_methods),
+                "unsupported_features": list(result.unsupported_features),
             },
         )
 
-    def _build_decision_proof_step(self, question_type: str, answer: str, decision_result) -> ProofTraceStep:
+    def _build_decision_proof_step(
+        self,
+        question_type: str,
+        answer: str,
+        decision_result,
+        entailments: Sequence[CandidateEntailment],
+    ) -> ProofTraceStep:
+        decision_details = _build_decision_details(question_type, answer, decision_result, entailments)
+        unknown_reason = decision_details.get("unknown_reason")
+        derived_facts = [f"answer={answer}"]
+        if isinstance(unknown_reason, str) and unknown_reason:
+            derived_facts.append(f"unknown_reason={unknown_reason}")
         return ProofTraceStep(
             step_id="answer_decision",
             action="select_public_answer",
             solver_route="decision",
             status="ok" if decision_result.status == "ok" else "partial",
             used_premise_ids=decision_result.used_premise_ids,
-            derived_facts=[f"answer={answer}"],
+            derived_facts=derived_facts,
             warnings=list(decision_result.warnings),
-            metadata={"question_type": question_type},
+            metadata={
+                "question_type": question_type,
+                "decision_details": decision_details,
+            },
         )
 
     def _extract_candidates(self, question: str):
@@ -792,3 +889,109 @@ def _safe_frame_error_metadata(exc: FrameExtractionError) -> dict[str, Any]:
     if diagnostics.get("errors"):
         metadata["frame_errors"] = list(diagnostics["errors"])
     return metadata
+
+
+def _build_solver_route_details(result, derivation_methods: Sequence[str]) -> dict[str, Any]:
+    methods = set(derivation_methods)
+    route = str(result.route)
+    details: dict[str, Any] = {
+        "route_label": route,
+        "status": result.status,
+    }
+
+    if route == "horn":
+        details.update(
+            {
+                "used_contraposition": "contraposition" in methods,
+                "used_quantifier_instantiation": bool({"schema_match", "existential_witness"} & methods),
+            }
+        )
+    elif route == "z3":
+        details["z3_status"] = result.solver_metadata.get("z3_status")
+    elif route == "semantic_fallback":
+        details.update(
+            {
+                "fallback_used": bool(result.solver_metadata.get("fallback_used")),
+                "fallback_overlap": result.solver_metadata.get("fallback_overlap"),
+                "fallback_reason": result.solver_metadata.get("fallback_reason"),
+                "original_route": result.solver_metadata.get("original_route"),
+                "z3_status": result.solver_metadata.get("z3_status"),
+            }
+        )
+
+    if result.status != "ok":
+        details["capability_gaps"] = list(result.unsupported_features)
+    return details
+
+
+def _build_decision_details(
+    question_type: str,
+    answer: str,
+    decision_result,
+    entailments: Sequence[CandidateEntailment],
+) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "question_type": question_type,
+        "selected_answer": answer,
+        "status": decision_result.status,
+        "used_premise_ids": list(decision_result.used_premise_ids),
+    }
+    candidate_outcomes = _serialize_candidate_outcomes(entailments)
+    details["candidate_outcomes"] = candidate_outcomes
+
+    if question_type == "mcq":
+        details["mcq_candidate_outcomes"] = candidate_outcomes
+    elif candidate_outcomes:
+        details["claim_result"] = candidate_outcomes[0]["claim_result"]
+        details["negated_claim_result"] = candidate_outcomes[0]["negated_claim_result"]
+
+    if answer == "Unknown":
+        details["unknown_reason"] = _classify_unknown_reason(question_type, candidate_outcomes, decision_result.warnings)
+    return details
+
+
+def _serialize_candidate_outcomes(entailments: Sequence[CandidateEntailment]) -> list[dict[str, Any]]:
+    outcomes: list[dict[str, Any]] = []
+    for entailment in entailments:
+        outcomes.append(
+            {
+                "label": entailment.label,
+                "question_type": entailment.question_type,
+                "claim_result": {
+                    "entailed": entailment.claim_result.entailed,
+                    "status": entailment.claim_result.status,
+                    "route": entailment.claim_result.route,
+                    "confidence": entailment.claim_result.confidence,
+                },
+                "negated_claim_result": {
+                    "entailed": entailment.negated_claim_result.entailed,
+                    "status": entailment.negated_claim_result.status,
+                    "route": entailment.negated_claim_result.route,
+                    "confidence": entailment.negated_claim_result.confidence,
+                },
+            }
+        )
+    return outcomes
+
+
+def _classify_unknown_reason(question_type: str, candidate_outcomes: Sequence[dict[str, Any]], warnings: Sequence[str]) -> str:
+    warning_set = set(warnings)
+    if question_type == "mcq":
+        if "mcq_no_unique_provable_option" in warning_set:
+            return "mcq_no_unique_provable_option"
+        if "mcq_multiple_provable_options" in warning_set:
+            return "mcq_multiple_provable_options"
+        return "mcq_no_supported_decision"
+
+    if not candidate_outcomes:
+        return "no_candidate_outcomes"
+
+    claim = candidate_outcomes[0]["claim_result"]
+    negated = candidate_outcomes[0]["negated_claim_result"]
+    claim_entailed = bool(claim.get("entailed"))
+    negated_entailed = bool(negated.get("entailed"))
+    if claim_entailed and negated_entailed:
+        return "both_claim_and_negation_entailed"
+    if not claim_entailed and not negated_entailed:
+        return "neither_claim_nor_negation_entailed"
+    return "partial_solver_outcome"

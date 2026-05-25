@@ -703,11 +703,11 @@ The system needs deterministic proof-backed reasoning before extended Z3/fallbac
 
 ### Completion Checklist
 
-- [ ] Horn prover exists.
-- [ ] Safe contraposition is tested.
-- [ ] Quantifier behavior is bounded and tested.
-- [ ] Answer decision works.
-- [ ] `report.md` contains Batch 8 result.
+- [x] Horn prover exists.
+- [x] Safe contraposition is tested.
+- [x] Quantifier behavior is bounded and tested.
+- [x] Answer decision works.
+- [x] `report.md` contains Batch 8 result.
 
 ## Mandatory Batch 8.5 - Numeric Layer Modularization and Maintainability
 
@@ -1234,7 +1234,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
 - [x] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
 - [x] Batch 7 - Numeric Layer with Source Provenance
-- [ ] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
+- [x] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
 - [ ] Batch 8.5 - Numeric Layer Modularization and Maintainability
 - [ ] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 - [ ] Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
@@ -1251,7 +1251,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M5 - LLM Semantic Parser
 - [x] M6 - Async Runtime Skeleton
 - [x] M7 - Numeric Reasoning Layer
-- [ ] M8 - Core Symbolic Reasoning
+- [x] M8 - Core Symbolic Reasoning
 - [ ] M8.5 - Numeric Layer Maintainability
 - [ ] M9 - Extended Verification
 - [ ] M10 - Public Output Layer
@@ -1334,19 +1334,19 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B7-T9
 - [x] B7-T10
 - [x] B7-T11
-- [ ] B8-T1
-- [ ] B8-T2
-- [ ] B8-T3
-- [ ] B8-T4
-- [ ] B8-T5
-- [ ] B8-T6
-- [ ] B8-T7
-- [ ] B8-T8
-- [ ] B8-T9
-- [ ] B8-T10
-- [ ] B8-T11
-- [ ] B8-T12
-- [ ] B8-T13
+- [x] B8-T1
+- [x] B8-T2
+- [x] B8-T3
+- [x] B8-T4
+- [x] B8-T5
+- [x] B8-T6
+- [x] B8-T7
+- [x] B8-T8
+- [x] B8-T9
+- [x] B8-T10
+- [x] B8-T11
+- [x] B8-T12
+- [x] B8-T13
 - [ ] B8.5-T1
 - [ ] B8.5-T2
 - [ ] B8.5-T3

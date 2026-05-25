@@ -1,4 +1,4 @@
-"""Batch 6 local async evaluation runner up to solver handoff."""
+"""Local async evaluation runner for the runtime pipeline."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from app.pipeline import AsyncRuntimePipeline, write_pipeline_artifacts
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run local Batch 6 async orchestration and write preliminary artifacts.")
+    parser = argparse.ArgumentParser(description="Run local async orchestration and write prediction/debug artifacts.")
     parser.add_argument("--input", default="data/processed/Logic_Based_Educational_Queries.flattened.json", help="Flattened local input dataset.")
     parser.add_argument("--output-dir", default="artifacts/local_eval", help="Directory for predictions/debug artifacts.")
     parser.add_argument("--env-path", default=".env", help="Path to .env file.")
@@ -56,6 +56,7 @@ def main() -> int:
     summary = {
         "status": "ok",
         "total_samples": len(results),
+        "ok_samples": sum(1 for item in results if item.status == "ok"),
         "partial_samples": sum(1 for item in results if item.status == "partial"),
         "failed_samples": sum(1 for item in results if item.status == "failed"),
         "predictions_path": artifacts.predictions_path,
@@ -67,4 +68,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

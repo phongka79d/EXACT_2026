@@ -634,3 +634,112 @@
 ### Validation
 - `python -m unittest tests.test_numeric_layer` - Passed.
 - `python -m unittest` - Passed.
+
+## Batch 8 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B8-T1: Complete.
+- B8-T2: Complete.
+- B8-T3: Complete.
+- B8-T4: Complete.
+- B8-T5: Complete.
+- B8-T6: Complete.
+- B8-T7: Complete.
+- B8-T8: Complete.
+- B8-T9: Complete.
+- B8-T10: Complete.
+- B8-T11: Complete.
+- B8-T12: Complete.
+- B8-T13: Complete.
+
+### Files Created or Modified
+- app/solver/__init__.py
+- app/solver/horn/__init__.py
+- app/solver/horn/models.py
+- app/solver/horn/prover.py
+- app/solver/contraposition/__init__.py
+- app/solver/quantifiers/__init__.py
+- app/output/__init__.py
+- app/output/decision/__init__.py
+- app/output/decision/models.py
+- app/output/decision/answer.py
+- app/pipeline/runtime.py
+- scripts/evaluate_local.py
+- tests/test_horn_solver.py
+- tests/test_contraposition.py
+- tests/test_quantifiers.py
+- tests/test_answer_decision.py
+- tests/test_async_pipeline.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/pipeline/runtime.py (649 lines): now includes end-to-end symbolic solving + answer-decision integration and proof-trace emission in the existing runtime orchestrator.
+- app/solver/horn/prover.py (309 lines): keeps Horn extraction, forward chaining, bounded quantifier usage, and entailment checks in one deterministic module for Batch 8.
+- app/solver/quantifiers/__init__.py (391 lines): contains bounded instantiation, schema matching, substitution, and canonicalization helpers used by the Horn prover.
+- task.md (1126 lines): updated only to mark Batch 8 checklist, batch/milestone status, and task IDs as complete.
+- report.md (532 lines before this append): shared append-only execution log across all completed batches.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_horn_solver.py` - Passed.
+- `python -m unittest tests/test_contraposition.py` - Passed.
+- `python -m unittest tests/test_quantifiers.py` - Passed.
+- `python -m unittest tests/test_answer_decision.py` - Passed.
+- `python -m unittest tests/test_async_pipeline.py` - Passed.
+- `python -m unittest tests/test_numeric_layer.py` - Passed.
+- `python -m unittest tests/test_logic_ast.py` - Passed.
+- `python -m unittest` - Passed.
+
+### Acceptance Criteria Check
+- Supported Horn cases are proven deterministically: Satisfied (forward chaining and candidate entailment tests pass).
+- Safe contraposition cases pass and unsafe cases are rejected: Satisfied (explicit safe/unsafe tests pass with `solver_capability_gap` rejection path).
+- Supported quantifier cases instantiate over discovered constants only: Satisfied (bounded/domain-aware instantiation and schema matching are tested).
+- Unknown is returned when neither claim nor negation is entailed: Satisfied (answer-decision tests cover this path).
+- MCQ local behavior can return `Unknown` when no unique option is proved: Satisfied (decision tests and pipeline tests cover ambiguous MCQ outcomes).
+
+### Artifacts Produced
+- New deterministic solver stack under `app/solver/`:
+  - Horn literal/rule/result models.
+  - Horn prover with forward chaining.
+  - Safe contraposition derivation helper.
+  - Bounded quantifier instantiation/schema-matching utilities.
+- New answer decision module under `app/output/decision/` for Yes/No/Unknown and local MCQ selection.
+- Pipeline symbolic-stage integration with solver proof-trace steps and answer-decision proof step.
+- New Batch 8 test suites:
+  - `tests/test_horn_solver.py`
+  - `tests/test_contraposition.py`
+  - `tests/test_quantifiers.py`
+  - `tests/test_answer_decision.py`
+
+### Checklist Update
+- Marked Batch 8 completion checklist items complete in `task.md`.
+- Marked `Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision` complete in the Progress Tracker.
+- Marked `M8 - Core Symbolic Reasoning` complete in the Progress Tracker.
+- Marked task IDs `B8-T1` through `B8-T13` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Implemented literal-level Horn reasoning with strict rule/fact extraction boundaries so non-Horn AST fragments explicitly report capability gaps instead of being guessed.
+- Applied safe contraposition only to grounded single-literal implications with arity/argument-position checks; rejected unsafe cases with explicit capability-gap markers.
+- Added bounded quantifier support with domain-aware constant instantiation, schema-level universal matching, and bounded existential witness checks.
+- Integrated symbolic solving into pipeline traces while preserving the runtime-safe field guard (no reference-only keys in trace payload metadata).
+
+### Risks or Open Issues
+- `app/solver/quantifiers/__init__.py` is large; Batch 8.5+ may benefit from splitting canonicalization/substitution helpers into smaller focused modules.
+- Existing inaccessible temporary directories in repository root (`tmpexub70qe`, `tmprpdk9dj7`) remain outside batch scope and unchanged.
+
+### Minor Issues Fixed During Execution
+- Fixed Horn literal equality semantics to ignore provenance metadata so entailment checks compare logical content rather than source tags.
+- Fixed trace serialization safety by renaming stage metadata key from `answer` to `selected_output_label` to avoid reference-field guard collisions.
+- Fixed quantifier canonicalization syntax/scoping issues in variable-token normalization used for schema-level universal matching.
+- Updated `scripts/evaluate_local.py` wording and summary fields so local-run output reflects current symbolic-answer behavior (not old handoff-only wording).
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 8 symbolic reasoning scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 8.5 can proceed and refactor the Batch 7 numeric layer with confidence that symbolic solver handoff/decision contracts are now implemented and test-covered.
+- Next batch should preserve the new solver + decision interfaces while modularizing numeric internals only.

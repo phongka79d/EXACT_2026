@@ -114,8 +114,8 @@ class AsyncPipelineTests(unittest.IsolatedAsyncioTestCase):
 
         cache_key = build_api_premise_cache_key(query.premises_nl)
         self.assertEqual(pipeline.premise_conversion_counts.get(cache_key), 1)
-        self.assertEqual(first.status, "partial")
-        self.assertEqual(second.status, "partial")
+        self.assertEqual(first.status, "ok")
+        self.assertEqual(second.status, "ok")
         premise_calls = [call for call in extractor.calls if call.mode == "premise"]
         self.assertEqual(len(premise_calls), 1)
         self.assertTrue(first.single_flight_waited or second.single_flight_waited or first.cache_hit or second.cache_hit)
@@ -138,7 +138,7 @@ class AsyncPipelineTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(results), 2)
         self.assertEqual(sum(1 for item in results if item.status == "failed"), 1)
-        self.assertEqual(sum(1 for item in results if item.status == "partial"), 1)
+        self.assertEqual(sum(1 for item in results if item.status == "ok"), 1)
 
     async def test_request_timeout_marks_result_failed(self):
         extractor = _ScriptedFrameExtractor(delay_by_mode={"candidate": 0.05})
@@ -187,11 +187,10 @@ class AsyncPipelineTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(predictions), 2)
             self.assertEqual(len(traces), 2)
             self.assertEqual(sum(1 for item in predictions if item["status"] == "failed"), 1)
-            self.assertEqual(sum(1 for item in predictions if item["status"] == "partial"), 1)
+            self.assertEqual(sum(1 for item in predictions if item["status"] == "ok"), 1)
         finally:
             shutil.rmtree(output_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
     unittest.main()
-

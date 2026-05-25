@@ -13,11 +13,13 @@ from app.cache import build_api_premise_cache_key, build_local_premise_cache_key
 from app.data import LocalRuntimeSample, RuntimeQuery
 from app.llm import FrameExtractionError, FrameExtractionInput
 from app.llm.extractor import FrameExtractor
-from app.logic.ast import LogicNode
+from app.logic.ast import LogicNode, NotNode
 from app.logic.compiler import compile_frame_to_ast
 from app.logic.frames import ParseFrame
 from app.numeric import NumericLayerResult, build_numeric_layer
+from app.output.decision import CandidateEntailment, decide_answer
 from app.questions import extract_candidates
+from app.solver import prove_entailment
 from app.tracing import CacheMetadata, DebugTrace, NumericDerivation, ProofTraceStep, SourceCitation, TraceStage
 
 from .models import PipelineSampleResult
@@ -211,34 +213,60 @@ class AsyncRuntimePipeline:
                 stages=stages,
             )
 
-        solver_stage = TraceStage(
-            name="solver_handoff",
-            status="partial",
-            duration_ms=0.0,
-            warnings=["Batch 7 stops at solver handoff; symbolic reasoning is scheduled for later batches."],
+        entailments, solver_stage = self._run_symbolic_solver(premise_bundle.asts, candidate_result, candidate_asts)
+        stages.append(solver_stage)
+        if solver_stage.status == "failed":
+            message = solver_stage.warnings[0] if solver_stage.warnings else "Symbolic solver failed"
+            return self._build_failure_result(
+                context,
+                started_at=started_at,
+                root_cause_category="proof_search_error",
+                root_cause_message=message,
+                stage_name="symbolic_solver",
+                cache_mode=context.cache_mode,
+                cache_key=cache_key,
+                cache_hit=cache_hit,
+                single_flight_waited=single_flight_waited,
+                question_type=candidate_result.question_type,
+                stages=stages,
+            )
+
+        decision_stage_start = time.perf_counter()
+        decision_result = decide_answer(candidate_result.question_type, entailments)
+        decision_stage = TraceStage(
+            name="answer_decision",
+            status="ok" if decision_result.status == "ok" else "partial",
+            duration_ms=_elapsed_ms(decision_stage_start),
+            warnings=list(decision_result.warnings),
             metadata={
-                "premise_ast_count": len(premise_bundle.asts),
-                "candidate_ast_count": len(candidate_asts),
                 "question_type": candidate_result.question_type,
-                "numeric_fact_count": len(numeric_result.solver_context.get("numeric_facts", [])),
-                "numeric_comparison_count": len(numeric_result.comparisons),
-                "z3_constraint_count": len(numeric_result.z3_constraints),
-                "numeric_solver_context": numeric_result.solver_context,
+                "selected_output_label": decision_result.answer,
+                "used_premise_ids": decision_result.used_premise_ids,
             },
         )
-        stages.append(solver_stage)
+        stages.append(decision_stage)
+
+        trace_status: Literal["ok", "partial"] = "ok"
+        root_cause_category: str | None = None
+        root_cause_message: str | None = None
+        if any(stage.status == "partial" for stage in stages):
+            trace_status = "partial"
+            if solver_stage.status == "partial":
+                root_cause_category = "solver_capability_gap"
+                root_cause_message = "Symbolic reasoning completed with capability gaps."
+
         total_ms = _elapsed_ms(started_at)
         trace = DebugTrace(
             sample_id=context.sample_id,
             record_id=context.record_id,
             question_id=context.question_id,
-            status="partial",
-            root_cause_category="solver_capability_gap",
-            root_cause_message="Reached solver handoff; solver route is not implemented in Batch 6.",
+            status=trace_status,
+            root_cause_category=root_cause_category,
+            root_cause_message=root_cause_message,
             created_at=_utc_now_iso(),
             total_duration_ms=total_ms,
             premises_hash=_cache_key_digest(cache_key),
-            warnings=list(candidate_result.warnings),
+            warnings=[*candidate_result.warnings, *decision_result.warnings],
             stages=stages,
             cache=CacheMetadata(
                 mode=context.cache_mode,
@@ -247,21 +275,26 @@ class AsyncRuntimePipeline:
                 cache_hit=cache_hit,
                 single_flight_waited=single_flight_waited,
             ),
-            proof_trace=[self._build_numeric_proof_step(numeric_result)],
+            proof_trace=[
+                self._build_numeric_proof_step(numeric_result),
+                *self._build_solver_proof_steps(entailments),
+                self._build_decision_proof_step(candidate_result.question_type, decision_result.answer, decision_result),
+            ],
             metadata={
                 "question_type": candidate_result.question_type,
                 "candidate_count": len(candidate_result.candidates),
                 "numeric_fact_count": len(numeric_result.solver_context.get("numeric_facts", [])),
                 "z3_constraint_count": len(numeric_result.z3_constraints),
+                "solver_route": "horn",
             },
         )
         return PipelineSampleResult(
             sample_id=context.sample_id,
             record_id=context.record_id,
             question_id=context.question_id,
-            answer="Unknown",
-            explanation="Numeric layer and solver handoff reached; final symbolic decision is pending later batches.",
-            status="partial",
+            answer=decision_result.answer,
+            explanation=decision_result.explanation,
+            status=trace_status,
             question_type=candidate_result.question_type,
             cache_mode=context.cache_mode,
             cache_key=cache_key,
@@ -366,6 +399,122 @@ class AsyncRuntimePipeline:
                 "z3_constraint_count": len(numeric_result.z3_constraints),
                 "conflict_count": len(numeric_result.conflicts),
             },
+        )
+
+    def _run_symbolic_solver(self, premise_asts, candidate_result, candidate_asts):
+        stage_start = time.perf_counter()
+        entailments: list[CandidateEntailment] = []
+        warnings: list[str] = []
+        try:
+            for candidate, candidate_ast in zip(candidate_result.candidates, candidate_asts, strict=True):
+                claim_result = prove_entailment(premise_asts, candidate_ast)
+                negated_claim = _negate_claim(candidate_ast)
+                negated_result = prove_entailment(premise_asts, negated_claim)
+                entailments.append(
+                    CandidateEntailment(
+                        label=candidate.label,
+                        question_type=candidate.question_type,
+                        claim_result=claim_result,
+                        negated_claim_result=negated_result,
+                    )
+                )
+                warnings.extend(claim_result.warnings)
+                warnings.extend(claim_result.unsupported_features)
+                warnings.extend(negated_result.warnings)
+                warnings.extend(negated_result.unsupported_features)
+        except Exception as exc:
+            return [], TraceStage(
+                name="symbolic_solver",
+                status="failed",
+                duration_ms=_elapsed_ms(stage_start),
+                warnings=[str(exc)],
+                metadata={},
+            )
+
+        stage_status: Literal["ok", "partial"] = "ok"
+        if any(item.claim_result.status != "ok" or item.negated_claim_result.status != "ok" for item in entailments):
+            stage_status = "partial"
+        return entailments, TraceStage(
+            name="symbolic_solver",
+            status=stage_status,
+            duration_ms=_elapsed_ms(stage_start),
+            warnings=_unique_strings(warnings),
+            metadata={
+                "candidate_count": len(entailments),
+                "question_type": candidate_result.question_type,
+            },
+        )
+
+    def _build_solver_proof_steps(self, entailments: Sequence[CandidateEntailment]) -> list[ProofTraceStep]:
+        steps: list[ProofTraceStep] = []
+        for entailment in entailments:
+            claim_step = self._build_single_solver_step(
+                step_id=f"solver_claim_{entailment.label}",
+                action="prove_claim",
+                result=entailment.claim_result,
+                candidate_label=entailment.label,
+            )
+            negated_step = self._build_single_solver_step(
+                step_id=f"solver_negated_claim_{entailment.label}",
+                action="prove_negated_claim",
+                result=entailment.negated_claim_result,
+                candidate_label=entailment.label,
+            )
+            steps.extend([claim_step, negated_step])
+        return steps
+
+    def _build_single_solver_step(self, *, step_id: str, action: str, result, candidate_label: str) -> ProofTraceStep:
+        citations: list[SourceCitation] = []
+        seen: set[tuple[str, int | None, str | None]] = set()
+        derived_strings: list[str] = []
+        for derivation in result.derived_facts:
+            rendered = derivation.literal.render()
+            if derivation.rule_text:
+                rendered = f"{rendered} [{derivation.rule_text}]"
+            derived_strings.append(rendered)
+            source_id = derivation.literal.source_id or f"candidate_{candidate_label}"
+            key = (source_id, derivation.literal.premise_id, candidate_label)
+            if key in seen:
+                continue
+            seen.add(key)
+            citations.append(
+                SourceCitation(
+                    source_id=source_id,
+                    source_text=None,
+                    premise_id=derivation.literal.premise_id,
+                    candidate_label=candidate_label,
+                )
+            )
+
+        status: Literal["ok", "partial"] = "ok"
+        warnings = [*result.warnings, *result.unsupported_features]
+        if result.status != "ok":
+            status = "partial"
+        return ProofTraceStep(
+            step_id=step_id,
+            action=action,
+            solver_route=result.route,
+            status=status,
+            used_premise_ids=result.used_premise_ids,
+            derived_facts=derived_strings,
+            citations=citations,
+            warnings=_unique_strings(warnings),
+            metadata={
+                "candidate_label": candidate_label,
+                "entailed": result.entailed,
+            },
+        )
+
+    def _build_decision_proof_step(self, question_type: str, answer: str, decision_result) -> ProofTraceStep:
+        return ProofTraceStep(
+            step_id="answer_decision",
+            action="select_public_answer",
+            solver_route="decision",
+            status="ok" if decision_result.status == "ok" else "partial",
+            used_premise_ids=decision_result.used_premise_ids,
+            derived_facts=[f"answer={answer}"],
+            warnings=list(decision_result.warnings),
+            metadata={"question_type": question_type},
         )
 
     def _extract_candidates(self, question: str):
@@ -531,3 +680,28 @@ def _utc_now_iso() -> str:
 
 def _cache_key_digest(cache_key: str) -> str:
     return hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
+
+
+def _negate_claim(node: LogicNode) -> LogicNode:
+    if isinstance(node, NotNode):
+        return node.body
+    return NotNode(
+        type="not",
+        body=node,
+        source_id=getattr(node, "source_id", None),
+        source_text=getattr(node, "source_text", None),
+        premise_id=getattr(node, "premise_id", None),
+        candidate_label=getattr(node, "candidate_label", None),
+        confidence=getattr(node, "confidence", None),
+    )
+
+
+def _unique_strings(items: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+    return result

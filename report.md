@@ -410,3 +410,29 @@
 ### Notes for Next Batch
 - Batch 6 can proceed with the new extractor contract and diagnostics metadata for pipeline trace integration.
 - Async orchestration can now consume stable APIs for premise/candidate frame extraction and cache behavior without adding solver logic yet.
+
+### Post-Batch 5 Review Fix - 2026-05-25
+
+#### Completed Fixes
+- Added explicit normalization diagnostics to `LLMFrameExtractor` so deterministic provider-output normalization is visible instead of silent.
+- Added regression coverage for underspecified model payload normalization.
+- Changed the live parse-frame smoke prompt from a dataset-like name to synthetic neutral text: `Student Alex has a cumulative GPA of 7.2.`
+
+#### Files Created or Modified
+- app/llm/extractor.py
+- tests/test_llm_frame_extraction.py
+- scripts/smoke_test_llm_parse_frame.py
+
+#### Files Over 200 Lines
+- app/llm/extractor.py (641 lines): remains centralized from Batch 5 and now additionally records normalization diagnostics; consider splitting normalization/cache/retry helpers in a later cleanup if this module grows further.
+
+#### Tests or Validations Run
+- `python -m unittest tests.test_llm_frame_extraction` - Passed.
+- `python -m unittest` - Passed.
+- `python scripts/smoke_test_llm_parse_frame.py --env-path .env --timeout-seconds 20 --max-attempts 3` - Passed.
+
+#### Workflow Integrity Check
+- Runtime did not use reference-only fields.
+- No overfit or hardcode shortcut was introduced.
+- `.env` secrets were not logged or written.
+- Live parse-frame smoke still uses the configured `.env` model and sanitized output only.

@@ -17,6 +17,25 @@ from app.config import EnvConfigError
 from app.llm import FrameExtractionError, FrameExtractionInput, build_default_llm_frame_extractor
 
 
+def _success_payload_from_result(result: Any) -> dict[str, Any]:
+    diagnostics = dict(result.diagnostics)
+    payload: dict[str, Any] = {
+        "status": "passed",
+        "model": diagnostics.get("model"),
+        "endpoint": diagnostics.get("endpoint"),
+        "frame_kind": getattr(result.frame, "kind", "unknown"),
+        "cache_hit": diagnostics.get("cache_hit"),
+        "attempts": diagnostics.get("attempts"),
+        "retry_count": diagnostics.get("retry_count"),
+        "repair_count": diagnostics.get("repair_count"),
+        "normalization_applied": diagnostics.get("normalization_applied"),
+        "normalization_warnings": diagnostics.get("normalization_warnings", []),
+    }
+    if (diagnostics.get("repair_count") or 0) > 0:
+        payload["repair_errors"] = list(diagnostics.get("errors") or [])
+    return payload
+
+
 async def run_smoke(env_path: str | Path, timeout_seconds: float, max_attempts: int) -> tuple[dict[str, Any], int]:
     try:
         extractor = build_default_llm_frame_extractor(
@@ -59,18 +78,7 @@ async def run_smoke(env_path: str | Path, timeout_seconds: float, max_attempts: 
             2 if status == "blocked" else 1,
         )
 
-    return (
-        {
-            "status": "passed",
-            "model": result.diagnostics.get("model"),
-            "endpoint": result.diagnostics.get("endpoint"),
-            "frame_kind": getattr(result.frame, "kind", "unknown"),
-            "cache_hit": result.diagnostics.get("cache_hit"),
-            "attempts": result.diagnostics.get("attempts"),
-            "repair_count": result.diagnostics.get("repair_count"),
-        },
-        0,
-    )
+    return (_success_payload_from_result(result), 0)
 
 
 def main() -> int:

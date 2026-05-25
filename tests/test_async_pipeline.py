@@ -7,7 +7,7 @@ from typing import Any
 
 from app.cache import build_api_premise_cache_key, build_local_premise_cache_key
 from app.data import LocalRuntimeSample, RuntimeQuery
-from app.llm import FrameExtractionInput, FrameExtractionResult
+from app.llm import FrameExtractionError, FrameExtractionInput, FrameExtractionResult
 from app.logic.frames import parse_frame
 from app.pipeline import AsyncRuntimePipeline, write_pipeline_artifacts
 
@@ -42,9 +42,11 @@ class _ScriptedFrameExtractor:
         *,
         delay_by_mode: dict[str, float] | None = None,
         fail_source_ids: set[str] | None = None,
+        frame_error_diagnostics_by_source_id: dict[str, dict[str, Any]] | None = None,
     ):
         self._delay_by_mode = dict(delay_by_mode or {})
         self._fail_source_ids = set(fail_source_ids or set())
+        self._frame_error_diagnostics_by_source_id = dict(frame_error_diagnostics_by_source_id or {})
         self.calls: list[FrameExtractionInput] = []
 
     async def extract_frame(self, request: FrameExtractionInput) -> FrameExtractionResult:
@@ -55,6 +57,11 @@ class _ScriptedFrameExtractor:
 
         if request.source_id in self._fail_source_ids:
             raise ValueError(f"scripted extractor failure for {request.source_id}")
+        if request.source_id in self._frame_error_diagnostics_by_source_id:
+            raise FrameExtractionError(
+                "scripted frame extraction failed",
+                diagnostics=self._frame_error_diagnostics_by_source_id[request.source_id],
+            )
 
         if request.mode == "premise":
             payload = _premise_frame_payload(
@@ -159,6 +166,35 @@ class AsyncPipelineTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.status, "failed")
         self.assertEqual(result.trace.root_cause_category, "timeout_error")
+
+    async def test_frame_extraction_failure_trace_includes_safe_diagnostics(self):
+        extractor = _ScriptedFrameExtractor(
+            frame_error_diagnostics_by_source_id={
+                "premise_0001": {
+                    "failure_type": "frame_validation_error",
+                    "attempts": 2,
+                    "repair_count": 1,
+                    "retry_count": 0,
+                    "errors": ["`type` must be a non-empty string"],
+                    "normalization_applied": False,
+                    "normalization_warnings": [],
+                    "api_key": "must-not-appear",
+                }
+            }
+        )
+        pipeline = AsyncRuntimePipeline(frame_extractor=extractor, max_concurrency=1, request_timeout_seconds=1.0, sample_timeout_seconds=2.0)
+        query = RuntimeQuery.from_mapping({"premises-NL": ["Mai is eligible."], "question": "Is Mai eligible?"})
+
+        result = await pipeline.process_runtime_query(query)
+
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.trace.root_cause_category, "llm_frame_error")
+        premise_stage = result.trace.stages[-1]
+        self.assertEqual(premise_stage.name, "premise_conversion")
+        self.assertEqual(premise_stage.metadata["failure_type"], "frame_validation_error")
+        self.assertEqual(premise_stage.metadata["repair_count"], 1)
+        self.assertEqual(premise_stage.metadata["frame_errors"], ["`type` must be a non-empty string"])
+        self.assertNotIn("api_key", premise_stage.metadata)
 
     async def test_artifacts_are_written_for_partial_and_failed_results(self):
         extractor = _ScriptedFrameExtractor(fail_source_ids={"question"})

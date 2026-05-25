@@ -7,7 +7,7 @@ import hashlib
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal, Sequence
+from typing import Any, Literal, Sequence
 
 from app.cache import build_api_premise_cache_key, build_local_premise_cache_key
 from app.data import LocalRuntimeSample, RuntimeQuery
@@ -562,7 +562,10 @@ class AsyncRuntimePipeline:
             except _RequestTimeoutError as exc:
                 return _PremiseBundle(frames=[], asts=[]), False, single_flight_waited, TraceStage(name="premise_timeout", status="failed", duration_ms=_elapsed_ms(stage_start), warnings=[str(exc)], metadata={"cache_hit": False})
             except Exception as exc:
-                return _PremiseBundle(frames=[], asts=[]), False, single_flight_waited, TraceStage(name="premise_conversion", status="failed", duration_ms=_elapsed_ms(stage_start), warnings=[str(exc)], metadata={"cache_hit": False})
+                metadata: dict[str, Any] = {"cache_hit": False}
+                if isinstance(exc, FrameExtractionError):
+                    metadata.update(_safe_frame_error_metadata(exc))
+                return _PremiseBundle(frames=[], asts=[]), False, single_flight_waited, TraceStage(name="premise_conversion", status="failed", duration_ms=_elapsed_ms(stage_start), warnings=[str(exc)], metadata=metadata)
             self._premise_cache[cache_key] = converted
             return converted, False, single_flight_waited, TraceStage(name="premise_conversion", status="ok", duration_ms=_elapsed_ms(stage_start), metadata={"cache_hit": False}, warnings=[])
 
@@ -595,7 +598,10 @@ class AsyncRuntimePipeline:
         except _RequestTimeoutError as exc:
             return [], TraceStage(name="candidate_timeout", status="failed", duration_ms=_elapsed_ms(stage_start), metadata={"candidate_ast_count": len(asts)}, warnings=[str(exc)])
         except (FrameExtractionError, ValueError) as exc:
-            return [], TraceStage(name="candidate_compilation", status="failed", duration_ms=_elapsed_ms(stage_start), metadata={"candidate_ast_count": len(asts)}, warnings=[str(exc)])
+            metadata: dict[str, Any] = {"candidate_ast_count": len(asts)}
+            if isinstance(exc, FrameExtractionError):
+                metadata.update(_safe_frame_error_metadata(exc))
+            return [], TraceStage(name="candidate_compilation", status="failed", duration_ms=_elapsed_ms(stage_start), metadata=metadata, warnings=[str(exc)])
 
     async def _extract_frame_with_timeout(self, request: FrameExtractionInput):
         try:
@@ -604,6 +610,15 @@ class AsyncRuntimePipeline:
             raise _RequestTimeoutError(
                 f"Frame extraction timed out after {self._request_timeout_seconds:.3f}s for {request.source_id}"
             ) from exc
+        except FrameExtractionError as exc:
+            diagnostics = dict(exc.diagnostics)
+            diagnostics.setdefault("source_id", request.source_id)
+            diagnostics.setdefault("frame_mode", request.mode)
+            if request.premise_id is not None:
+                diagnostics.setdefault("premise_id", request.premise_id)
+            if request.candidate_label is not None:
+                diagnostics.setdefault("candidate_label", request.candidate_label)
+            raise FrameExtractionError(str(exc), diagnostics=diagnostics) from exc
 
     def _build_failure_result(
         self,
@@ -705,3 +720,27 @@ def _unique_strings(items: Sequence[str]) -> list[str]:
         seen.add(item)
         result.append(item)
     return result
+
+
+def _safe_frame_error_metadata(exc: FrameExtractionError) -> dict[str, Any]:
+    diagnostics = dict(exc.diagnostics)
+    safe_keys = (
+        "source_id",
+        "frame_mode",
+        "premise_id",
+        "candidate_label",
+        "failure_type",
+        "model",
+        "prompt_version",
+        "extractor_version",
+        "endpoint",
+        "attempts",
+        "repair_count",
+        "retry_count",
+        "normalization_applied",
+        "normalization_warnings",
+    )
+    metadata = {key: diagnostics[key] for key in safe_keys if key in diagnostics}
+    if diagnostics.get("errors"):
+        metadata["frame_errors"] = list(diagnostics["errors"])
+    return metadata

@@ -94,6 +94,25 @@ class PromptContractTests(unittest.TestCase):
         self.assertIn("do not choose an option", combined)
         self.assertIn("do not return yes/no", combined)
 
+    def test_repair_prompt_contains_rule_template_for_missing_if_then_errors(self):
+        from app.llm.prompts import build_repair_frame_messages
+
+        messages = build_repair_frame_messages(
+            source_text="If a Python code is well-tested, then the project is optimized.",
+            source_id="premise_0001",
+            premise_id=1,
+            candidate_label=None,
+            frame_mode="premise",
+            validation_error="Rule frame must contain at least one `if` slot",
+        )
+
+        combined = "\n".join(message["content"] for message in messages).lower()
+
+        self.assertIn("if direct rule", combined)
+        self.assertIn('"if":[', combined)
+        self.assertIn('"then":[', combined)
+        self.assertIn("every slot object must include", combined)
+
     def test_prompt_version_changes_cache_key(self):
         request = FrameExtractionInput(
             mode="premise",
@@ -110,11 +129,11 @@ class PromptContractTests(unittest.TestCase):
         previous_prompt_key = build_frame_cache_key(
             request,
             model="qwen2.5-7b-instruct",
-            prompt_version="batch8_5_v1",
+            prompt_version="batch8_6_v1",
             extractor_version=EXTRACTOR_VERSION,
         )
 
-        self.assertRegex(PROMPT_VERSION, r"batch8_6_v\d+")
+        self.assertRegex(PROMPT_VERSION, r"batch8_7_v\d+")
         self.assertNotEqual(current_key, previous_prompt_key)
 
 
@@ -245,6 +264,24 @@ class LLMFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("validation_error", repair_prompt)
         self.assertIn("source_text", repair_prompt)
 
+    async def test_malformed_payload_enters_repair_loop(self):
+        malformed_first_pass = "{'kind':'fact','source_text':'unterminated}"
+        valid_repair = json.dumps(_valid_fact_frame_payload())
+        client = _ScriptedClient([malformed_first_pass, valid_repair])
+        extractor = LLMFrameExtractor(client=client, max_attempts=2, max_repairs=1, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="Mai has GPA 7.2.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "fact")
+        self.assertEqual(result.diagnostics["repair_count"], 1)
+
     async def test_transient_failure_retries_with_backoff(self):
         client = _ScriptedClient([LLMTransientError("temporary outage"), json.dumps(_valid_fact_frame_payload())])
         sleep_calls: list[float] = []
@@ -319,6 +356,304 @@ class LLMFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("normalization_warnings", result.diagnostics)
         self.assertIn("warnings_defaulted", result.diagnostics["normalization_warnings"])
         self.assertIn("slot_type_inferred:numeric_value", result.diagnostics["normalization_warnings"])
+
+    async def test_rule_aliases_and_predicate_slots_are_normalized(self):
+        aliased_rule_payload = {
+            "kind": "rule",
+            "scope": "Python code",
+            "conditions": [{"entity": "Python code", "predicate": "well_tested"}],
+            "consequences": [{"entity": "project", "predicate": "optimized"}],
+            "source_id": "premise_0001",
+            "source_text": "If a Python code is well-tested, then the project is optimized.",
+            "premise_id": 1,
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(aliased_rule_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="If a Python code is well-tested, then the project is optimized.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "rule")
+        self.assertEqual(result.frame.if_slots[0].type, "predicate")
+        self.assertEqual(result.frame.then_slots[0].type, "predicate")
+        self.assertIn("rule_if_alias:conditions", result.diagnostics["normalization_warnings"])
+        self.assertIn("rule_then_alias:consequences", result.diagnostics["normalization_warnings"])
+        self.assertIn("slot_type_inferred:predicate", result.diagnostics["normalization_warnings"])
+
+    async def test_numeric_attribute_aliases_are_normalized(self):
+        numeric_payload = {
+            "kind": "fact",
+            "entity": "Alex",
+            "facts": [{"type": "numeric_value", "entity": "Alex", "name": "cumulative_gpa", "value": 7.2}],
+            "source_id": "premise_0001",
+            "source_text": "Student Alex has a cumulative GPA of 7.2.",
+            "premise_id": 1,
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(numeric_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="Student Alex has a cumulative GPA of 7.2.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "fact")
+        self.assertEqual(result.frame.facts[0].type, "numeric_value")
+        self.assertEqual(result.frame.facts[0].attribute, "cumulative_gpa")
+        self.assertIn("numeric_attribute_alias:name", result.diagnostics["normalization_warnings"])
+
+    async def test_rule_slot_entities_default_from_scope(self):
+        scoped_rule_payload = {
+            "kind": "rule",
+            "scope": "students",
+            "if": [{"type": "predicate", "name": "completed_core_curriculum"}],
+            "then": [{"type": "entity_relation", "relation": "qualified_for", "object": "advanced_courses"}],
+            "source_id": "premise_0001",
+            "source_text": "Students who have completed the core curriculum are qualified for advanced courses.",
+            "premise_id": 1,
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(scoped_rule_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="Students who have completed the core curriculum are qualified for advanced courses.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "rule")
+        self.assertEqual(result.frame.if_slots[0].entity, "students")
+        self.assertEqual(result.frame.then_slots[0].subject, "students")
+        self.assertIn("slot_entity_defaulted", result.diagnostics["normalization_warnings"])
+        self.assertIn("relation_subject_defaulted", result.diagnostics["normalization_warnings"])
+
+    async def test_nonnumeric_numeric_value_is_retyped_to_predicate(self):
+        mislabeled_payload = {
+            "kind": "fact",
+            "entity": "students",
+            "facts": [{"type": "numeric_value", "entity": "students", "attribute": "completed_core_curriculum", "value": "completed"}],
+            "source_id": "premise_0001",
+            "source_text": "Students have completed the core curriculum.",
+            "premise_id": 1,
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(mislabeled_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="Students have completed the core curriculum.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "fact")
+        self.assertEqual(result.frame.facts[0].type, "predicate")
+        self.assertEqual(result.frame.facts[0].name, "completed_core_curriculum")
+        self.assertIn("numeric_value_retyped:predicate_non_numeric_value", result.diagnostics["normalization_warnings"])
+
+    async def test_numeric_string_values_are_coerced_to_numbers(self):
+        numeric_string_payload = {
+            "kind": "fact",
+            "entity": "Alex",
+            "facts": [{"type": "numeric_value", "entity": "Alex", "attribute": "cumulative_gpa", "value": "7.2"}],
+            "source_id": "premise_0001",
+            "source_text": "Student Alex has a cumulative GPA of 7.2.",
+            "premise_id": 1,
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(numeric_string_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="Student Alex has a cumulative GPA of 7.2.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "fact")
+        self.assertEqual(result.frame.facts[0].type, "numeric_value")
+        self.assertEqual(result.frame.facts[0].value, 7.2)
+        self.assertIn("numeric_string_value_coerced", result.diagnostics["normalization_warnings"])
+
+    async def test_numeric_value_alias_string_is_coerced_to_number(self):
+        numeric_alias_payload = {
+            "kind": "fact",
+            "entity": "Alex",
+            "facts": [{"entity": "Alex", "attribute": "cumulative_gpa", "numeric_value": "7.2"}],
+            "source_id": "premise_0001",
+            "source_text": "Student Alex has a cumulative GPA of 7.2.",
+            "premise_id": 1,
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(numeric_alias_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="Student Alex has a cumulative GPA of 7.2.",
+            )
+        )
+
+        self.assertEqual(result.frame.facts[0].type, "numeric_value")
+        self.assertEqual(result.frame.facts[0].value, 7.2)
+        self.assertIn("numeric_value_alias:numeric_value", result.diagnostics["normalization_warnings"])
+        self.assertIn("numeric_string_value_coerced", result.diagnostics["normalization_warnings"])
+
+    async def test_python_literal_dict_payload_is_parsed(self):
+        python_literal_payload = (
+            "{'kind':'fact','entity':'Alex','facts':[{'type':'predicate','entity':'Alex','name':'eligible'}],"
+            "'source_id':'premise_0001','source_text':'Alex is eligible.','premise_id':1,'warnings':[]}"
+        )
+        client = _ScriptedClient([python_literal_payload])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0001",
+                premise_id=1,
+                source_text="Alex is eligible.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "fact")
+        self.assertEqual(result.frame.facts[0].name, "eligible")
+
+    async def test_empty_rule_scope_and_relation_aliases_are_normalized(self):
+        rule_payload = {
+            "kind": "rule",
+            "scope": "",
+            "if": [{"type": "predicate", "entity": "students", "attribute": "awarded_honors_diploma"}],
+            "then": [{"type": "entity_relation", "subject": "students", "name": "qualifies_for", "object": "scholarship"}],
+            "source_id": "premise_0005",
+            "source_text": "Students who have been awarded an honors diploma qualify for the university scholarship.",
+            "premise_id": 5,
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(rule_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0005",
+                premise_id=5,
+                source_text="Students who have been awarded an honors diploma qualify for the university scholarship.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "rule")
+        self.assertTrue(result.frame.scope)
+        self.assertEqual(result.frame.if_slots[0].name, "awarded_honors_diploma")
+        self.assertEqual(result.frame.then_slots[0].relation, "qualifies_for")
+        self.assertIn("scope_defaulted", result.diagnostics["normalization_warnings"])
+        self.assertIn("predicate_name_alias:attribute", result.diagnostics["normalization_warnings"])
+        self.assertIn("relation_name_alias:name", result.diagnostics["normalization_warnings"])
+
+    async def test_direct_rule_without_condition_is_retyped_to_fact(self):
+        direct_payload = {
+            "kind": "rule",
+            "scope": "projects",
+            "then": [{"type": "predicate", "entity": "projects", "name": "optimized"}],
+            "source_id": "premise_0013",
+            "source_text": "There exists at least one project that is optimized.",
+            "premise_id": 13,
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(direct_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_0013",
+                premise_id=13,
+                source_text="There exists at least one project that is optimized.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "fact")
+        self.assertEqual(result.frame.facts[0].name, "optimized")
+        self.assertIn("rule_without_condition_retyped:fact", result.diagnostics["normalization_warnings"])
+
+    async def test_string_claim_is_wrapped_as_predicate_slot(self):
+        claim_payload = {
+            "kind": "claim",
+            "answer_type": "yes_no_unknown",
+            "claim": "Sophia qualifies for the university scholarship",
+            "source_id": "question",
+            "source_text": "Does Sophia qualify for the university scholarship?",
+            "candidate_label": "claim",
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(claim_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="candidate",
+                source_id="question",
+                candidate_label="claim",
+                source_text="Does Sophia qualify for the university scholarship?",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "claim")
+        self.assertEqual(result.frame.claim.type, "predicate")
+        self.assertEqual(result.frame.claim.entity, "Sophia")
+        self.assertIn("claim_text_wrapped_as_predicate", result.diagnostics["normalization_warnings"])
+
+    async def test_missing_candidate_claim_falls_back_to_source_text_predicate(self):
+        claim_payload = {
+            "kind": "claim",
+            "answer_type": "yes_no_unknown",
+            "claim": None,
+            "source_id": "question",
+            "source_text": "Does Sophia qualify for the university scholarship?",
+            "candidate_label": "claim",
+            "warnings": [],
+        }
+        client = _ScriptedClient([json.dumps(claim_payload)])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+
+        result = await extractor.extract_frame(
+            FrameExtractionInput(
+                mode="candidate",
+                source_id="question",
+                candidate_label="claim",
+                source_text="Does Sophia qualify for the university scholarship?",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "claim")
+        self.assertEqual(result.frame.claim.type, "predicate")
+        self.assertEqual(result.frame.claim.entity, "Sophia")
+        self.assertIn("claim_text_wrapped_as_predicate", result.diagnostics["normalization_warnings"])
 
     def test_reference_only_fields_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "reference-only"):

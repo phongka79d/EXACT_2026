@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ast
 import hashlib
 import json
 import random
@@ -27,6 +28,38 @@ from .prompts import (
 
 REFERENCE_ONLY_INPUT_KEYS = frozenset({"premises-fol", "premises_fol", "answer", "explanation", "idx"})
 _BEARER_RE = re.compile(r"Bearer\s+[A-Za-z0-9._\-]+", re.IGNORECASE)
+_RULE_IF_ALIASES = (
+    "conditions",
+    "condition",
+    "antecedents",
+    "antecedent",
+    "requirements",
+    "requirement",
+    "prerequisites",
+    "prerequisite",
+    "given",
+    "given_that",
+    "when",
+)
+_RULE_THEN_ALIASES = (
+    "consequences",
+    "consequence",
+    "consequents",
+    "consequent",
+    "results",
+    "result",
+    "outcomes",
+    "outcome",
+    "conclusions",
+    "conclusion",
+    "effects",
+    "effect",
+)
+_PREDICATE_NAME_ALIASES = ("predicate", "property", "attribute", "state", "trait", "category", "label")
+_RELATION_NAME_ALIASES = ("relation_type", "name", "predicate", "property", "attribute")
+_NUMERIC_ATTRIBUTE_ALIASES = ("name", "metric", "measure", "field", "property", "score_type", "quantity")
+_NUMERIC_VALUE_ALIASES = ("number", "amount", "score", "quantity_value", "numeric_value")
+_NUMERIC_OPERATOR_ALIASES = ("operator", "comparison", "comparator")
 
 
 @dataclass(frozen=True)
@@ -402,17 +435,26 @@ def _json_fallback(value: Any) -> Any:
 
 
 def _parse_json_object(content: str) -> dict[str, Any]:
-    parsed: Any
     try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError:
+        parsed = _loads_json_or_literal_object(content)
+    except (json.JSONDecodeError, ValueError, SyntaxError) as exc:
         extracted = _extract_first_json_object(content)
         if extracted is None:
-            raise
-        parsed = json.loads(extracted)
+            raise ValueError("Model output must contain a parseable JSON object") from exc
+        try:
+            parsed = _loads_json_or_literal_object(extracted)
+        except (json.JSONDecodeError, ValueError, SyntaxError) as extracted_exc:
+            raise ValueError("Model output must contain a parseable JSON object") from extracted_exc
     if not isinstance(parsed, dict):
         raise ValueError("Model output must be a JSON object")
     return parsed
+
+
+def _loads_json_or_literal_object(content: str) -> Any:
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return ast.literal_eval(content)
 
 
 def _sanitize_error_message(message: str, *, api_key: str | None) -> str:
@@ -478,6 +520,21 @@ def _normalize_model_payload(payload: dict[str, Any], request: FrameExtractionIn
         normalized["then"] = normalized.pop("then_slots")
         _add_normalization_warning(normalization_warnings, "then_slots_renamed")
 
+    _promote_slot_alias(
+        normalized,
+        target_key="if",
+        aliases=_RULE_IF_ALIASES,
+        warning_prefix="rule_if_alias",
+        normalization_warnings=normalization_warnings,
+    )
+    _promote_slot_alias(
+        normalized,
+        target_key="then",
+        aliases=_RULE_THEN_ALIASES,
+        warning_prefix="rule_then_alias",
+        normalization_warnings=normalization_warnings,
+    )
+
     kind = normalized.get("kind")
     if not isinstance(kind, str) or not kind.strip():
         if "facts" in normalized:
@@ -515,9 +572,20 @@ def _normalize_model_payload(payload: dict[str, Any], request: FrameExtractionIn
             normalized["candidate_label"] = request.candidate_label
             _add_normalization_warning(normalization_warnings, "candidate_label_defaulted")
 
-    default_entity = normalized.get("entity")
+    default_entity = _default_entity_for_frame(normalized, request.source_text)
 
     kind_text = normalized.get("kind")
+    if (
+        kind_text == "rule"
+        and not _looks_like_slot_collection(normalized.get("if"))
+        and _looks_like_slot_collection(normalized.get("then"))
+        and not _source_has_conditional_marker(request.source_text)
+    ):
+        normalized["kind"] = "fact"
+        normalized["facts"] = normalized["then"]
+        kind_text = "fact"
+        _add_normalization_warning(normalization_warnings, "rule_without_condition_retyped:fact")
+
     if kind_text == "fact":
         normalized["facts"] = _normalize_slot_collection(
             normalized.get("facts"),
@@ -535,14 +603,55 @@ def _normalize_model_payload(payload: dict[str, Any], request: FrameExtractionIn
             default_entity=default_entity,
             normalization_warnings=normalization_warnings,
         )
-        if "scope" not in normalized:
-            normalized["scope"] = "entities"
+        if not _has_nonempty_string(normalized.get("scope")):
+            normalized["scope"] = default_entity or "entities"
             _add_normalization_warning(normalization_warnings, "scope_defaulted")
     elif kind_text == "claim":
         claim_value = normalized.get("claim")
+        if request.mode == "premise":
+            if isinstance(claim_value, Mapping):
+                normalized["facts"] = [
+                    _normalize_slot(
+                        dict(claim_value),
+                        default_entity=default_entity,
+                        normalization_warnings=normalization_warnings,
+                    )
+                ]
+            elif isinstance(claim_value, str) and claim_value.strip():
+                normalized["facts"] = [
+                    _predicate_slot_from_text(
+                        claim_value,
+                        default_entity=default_entity,
+                        normalization_warnings=normalization_warnings,
+                    )
+                ]
+            else:
+                normalized["facts"] = [
+                    _predicate_slot_from_text(
+                        str(normalized.get("source_text") or request.source_text),
+                        default_entity=default_entity,
+                        normalization_warnings=normalization_warnings,
+                    )
+                ]
+            if "facts" in normalized:
+                normalized["kind"] = "fact"
+                _add_normalization_warning(normalization_warnings, "premise_claim_retyped:fact")
+            return normalized, normalization_warnings
         if isinstance(claim_value, Mapping):
             normalized["claim"] = _normalize_slot(
                 dict(claim_value),
+                default_entity=default_entity,
+                normalization_warnings=normalization_warnings,
+            )
+        elif isinstance(claim_value, str) and claim_value.strip():
+            normalized["claim"] = _predicate_slot_from_text(
+                claim_value,
+                default_entity=default_entity,
+                normalization_warnings=normalization_warnings,
+            )
+        else:
+            normalized["claim"] = _predicate_slot_from_text(
+                str(normalized.get("source_text") or request.source_text),
                 default_entity=default_entity,
                 normalization_warnings=normalization_warnings,
             )
@@ -597,11 +706,83 @@ def _normalize_slot(
         _add_normalization_warning(normalization_warnings, f"slot_type_inferred:{inferred_type or 'unknown'}")
         slot_type = normalized.get("type")
 
-    if normalized.get("type") == "predicate" and "entity" not in normalized and isinstance(default_entity, str):
-        normalized["entity"] = default_entity
-        _add_normalization_warning(normalization_warnings, "slot_entity_defaulted")
+    if normalized.get("type") in {"numeric_condition", "numeric_value"} and "value" not in normalized:
+        for alias in _NUMERIC_VALUE_ALIASES:
+            alias_value = normalized.get(alias)
+            if _is_number(alias_value) or (isinstance(alias_value, str) and alias_value.strip()):
+                normalized["value"] = alias_value
+                _add_normalization_warning(normalization_warnings, f"numeric_value_alias:{alias}")
+                break
+
+    if normalized.get("type") in {"numeric_condition", "numeric_value"} and "value" in normalized:
+        coerced_value, inferred_unit = _coerce_numeric_string(normalized.get("value"))
+        if coerced_value is not None:
+            normalized["value"] = coerced_value
+            _add_normalization_warning(normalization_warnings, "numeric_string_value_coerced")
+            if inferred_unit is not None and "unit" not in normalized:
+                normalized["unit"] = inferred_unit
+                _add_normalization_warning(normalization_warnings, f"numeric_unit_inferred:{inferred_unit}")
+
+    if normalized.get("type") == "numeric_value" and not _is_number(normalized.get("value")):
+        normalized["type"] = "predicate"
+        if "name" not in normalized:
+            attribute_value = normalized.get("attribute")
+            value_text = normalized.get("value")
+            if isinstance(attribute_value, str) and attribute_value.strip():
+                normalized["name"] = attribute_value
+            elif isinstance(value_text, str) and value_text.strip():
+                normalized["name"] = value_text
+        _add_normalization_warning(normalization_warnings, "numeric_value_retyped:predicate_non_numeric_value")
+
+    if normalized.get("type") == "predicate":
+        if "name" not in normalized:
+            for alias in _PREDICATE_NAME_ALIASES:
+                alias_value = normalized.get(alias)
+                if isinstance(alias_value, str) and alias_value.strip():
+                    normalized["name"] = alias_value
+                    _add_normalization_warning(normalization_warnings, f"predicate_name_alias:{alias}")
+                    break
+        if "entity" not in normalized and isinstance(normalized.get("subject"), str):
+            normalized["entity"] = normalized["subject"]
+            _add_normalization_warning(normalization_warnings, "predicate_entity_alias:subject")
+        if "entity" not in normalized and isinstance(default_entity, str):
+            normalized["entity"] = default_entity
+            _add_normalization_warning(normalization_warnings, "slot_entity_defaulted")
+
+    if normalized.get("type") == "entity_relation":
+        if not _has_nonempty_string(normalized.get("relation")):
+            for alias in _RELATION_NAME_ALIASES:
+                alias_value = normalized.get(alias)
+                if isinstance(alias_value, str) and alias_value.strip():
+                    normalized["relation"] = alias_value
+                    _add_normalization_warning(normalization_warnings, f"relation_name_alias:{alias}")
+                    break
+        if "subject" not in normalized and isinstance(default_entity, str):
+            normalized["subject"] = default_entity
+            _add_normalization_warning(normalization_warnings, "relation_subject_defaulted")
+        if "object" not in normalized:
+            for alias in ("target", "destination", "object_entity", "value"):
+                alias_value = normalized.get(alias)
+                if isinstance(alias_value, str) and alias_value.strip():
+                    normalized["object"] = alias_value
+                    _add_normalization_warning(normalization_warnings, f"relation_object_alias:{alias}")
+                    break
 
     if normalized.get("type") in {"numeric_condition", "numeric_value"}:
+        if "attribute" not in normalized:
+            for alias in _NUMERIC_ATTRIBUTE_ALIASES:
+                alias_value = normalized.get(alias)
+                if isinstance(alias_value, str) and alias_value.strip():
+                    normalized["attribute"] = alias_value
+                    _add_normalization_warning(normalization_warnings, f"numeric_attribute_alias:{alias}")
+                    break
+        if "op" not in normalized and normalized.get("type") == "numeric_condition":
+            for alias in _NUMERIC_OPERATOR_ALIASES:
+                alias_value = normalized.get(alias)
+                if isinstance(alias_value, str) and alias_value.strip():
+                    normalized["op"] = alias_value
+                    _add_normalization_warning(normalization_warnings, f"numeric_operator_alias:{alias}")
+                    break
         if "entity" not in normalized and isinstance(default_entity, str):
             normalized["entity"] = default_entity
             _add_normalization_warning(normalization_warnings, "slot_entity_defaulted")
@@ -628,14 +809,143 @@ def _add_normalization_warning(warnings: list[str], warning: str) -> None:
 
 
 def _infer_slot_type(slot: Mapping[str, Any]) -> str:
+    has_numeric_attribute = "attribute" in slot or any(alias in slot for alias in _NUMERIC_ATTRIBUTE_ALIASES)
+    has_numeric_value = "value" in slot or any(alias in slot for alias in _NUMERIC_VALUE_ALIASES)
+    has_numeric_operator = "op" in slot or any(alias in slot for alias in _NUMERIC_OPERATOR_ALIASES)
     if {"subject", "relation", "object"}.issubset(slot.keys()):
         return "entity_relation"
     if "op" in slot and "operands" in slot:
         return "arithmetic_expression"
-    if "attribute" in slot and "op" in slot:
+    if has_numeric_attribute and has_numeric_operator:
         return "numeric_condition"
-    if "attribute" in slot and "value" in slot:
+    if has_numeric_attribute and has_numeric_value:
         return "numeric_value"
-    if "name" in slot:
+    if "name" in slot or any(alias in slot for alias in _PREDICATE_NAME_ALIASES):
         return "predicate"
     return ""
+
+
+def _default_entity_for_frame(payload: Mapping[str, Any], source_text: str) -> str | None:
+    for key in ("entity", "scope", "subject"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return _infer_generic_entity_from_text(source_text)
+
+
+def _infer_generic_entity_from_text(source_text: str) -> str | None:
+    text = " ".join(source_text.split())
+    if not text:
+        return None
+    lowered = text.lower()
+    for prefix in ("all ", "every "):
+        if lowered.startswith(prefix):
+            rest = text[len(prefix) :]
+            for marker in (" are ", " is ", " have ", " has ", " who ", " that "):
+                marker_index = rest.lower().find(marker)
+                if marker_index > 0:
+                    candidate = rest[:marker_index].strip(" .,;:")
+                    if candidate:
+                        return candidate
+            break
+    words = text.split()
+    if len(words) > 1 and words[0].strip(" .,;:?").lower() in {"does", "do", "did", "is", "are", "can", "could", "will", "would", "should"}:
+        second_word = words[1].strip(" .,;:?")
+        if second_word and second_word[:1].isupper():
+            return second_word
+    first_word = words[0].strip(" .,;:") if words else ""
+    if first_word and first_word[:1].isupper():
+        return first_word
+    return None
+
+
+def _source_has_conditional_marker(source_text: str) -> bool:
+    lowered = f" {' '.join(source_text.lower().split())} "
+    return any(
+        marker in lowered
+        for marker in (
+            " if ",
+            " when ",
+            " whenever ",
+            " who ",
+            " provided that ",
+            " unless ",
+            " requires ",
+            " requirement ",
+        )
+    )
+
+
+def _predicate_slot_from_text(
+    text: str,
+    *,
+    default_entity: Any,
+    normalization_warnings: list[str],
+) -> dict[str, Any]:
+    entity = default_entity if isinstance(default_entity, str) and default_entity.strip() else _infer_generic_entity_from_text(text)
+    if not entity:
+        entity = "entity"
+    _add_normalization_warning(normalization_warnings, "claim_text_wrapped_as_predicate")
+    return {
+        "type": "predicate",
+        "entity": entity,
+        "name": _predicate_name_from_text(text),
+        "polarity": True,
+    }
+
+
+def _predicate_name_from_text(text: str) -> str:
+    cleaned = " ".join(text.split()).strip(" .,;:?")
+    return cleaned or "claim_text"
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _has_nonempty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _coerce_numeric_string(value: Any) -> tuple[float | int | None, str | None]:
+    if not isinstance(value, str):
+        return None, None
+    stripped = value.strip()
+    if not stripped:
+        return None, None
+    inferred_unit: str | None = None
+    if stripped.endswith("%"):
+        inferred_unit = "percent"
+        stripped = stripped[:-1].strip()
+    normalized = stripped.replace(",", "")
+    if re.fullmatch(r"[-+]?\d+", normalized):
+        return int(normalized), inferred_unit
+    if re.fullmatch(r"[-+]?(?:\d+\.\d+|\d+\.|\.\d+)", normalized):
+        return float(normalized), inferred_unit
+    return None, None
+
+
+def _promote_slot_alias(
+    payload: dict[str, Any],
+    *,
+    target_key: str,
+    aliases: tuple[str, ...],
+    warning_prefix: str,
+    normalization_warnings: list[str],
+) -> None:
+    if _looks_like_slot_collection(payload.get(target_key)):
+        return
+    for alias in aliases:
+        alias_value = payload.get(alias)
+        if _looks_like_slot_collection(alias_value):
+            payload[target_key] = alias_value
+            _add_normalization_warning(normalization_warnings, f"{warning_prefix}:{alias}")
+            return
+
+
+def _looks_like_slot_collection(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        return bool(value)
+    if isinstance(value, list):
+        return any(isinstance(item, Mapping) for item in value)
+    return False

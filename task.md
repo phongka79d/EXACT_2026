@@ -874,11 +874,11 @@ The parser prompt is currently the most fragile root-cause point in the pipeline
 
 ### Completion Checklist
 
-- [ ] Parser prompts are hardened for approved frame/slot/numeric/nested cases.
-- [ ] Prompt/cache versioning is updated when needed.
-- [ ] Prompt regression tests pass.
-- [ ] Live parse-frame smoke passes or a sanitized blocker is reported.
-- [ ] `report.md` contains Batch 8.6 result.
+- [x] Parser prompts are hardened for approved frame/slot/numeric/nested cases.
+- [x] Prompt/cache versioning is updated when needed.
+- [x] Prompt regression tests pass.
+- [x] Live parse-frame smoke passes or a sanitized blocker is reported.
+- [x] `report.md` contains Batch 8.6 result.
 
 ## Mandatory Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 
@@ -1478,7 +1478,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 7 - Numeric Layer with Source Provenance
 - [x] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
 - [x] Batch 8.5 - Numeric Layer Modularization and Maintainability
-- [ ] Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
+- [x] Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
 - [ ] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 - [ ] Batch 9.5 - Solver Citation Source-Text Enrichment
 - [ ] Batch 9.6 - Proof Trace Explanation Readiness
@@ -1498,7 +1498,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M7 - Numeric Reasoning Layer
 - [x] M8 - Core Symbolic Reasoning
 - [x] M8.5 - Numeric Layer Maintainability
-- [ ] M8.6 - LLM Parser Prompt Hardening
+- [x] M8.6 - LLM Parser Prompt Hardening
 - [ ] M9 - Extended Verification
 - [ ] M9.5 - Solver Citation Enrichment
 - [ ] M9.6 - Proof Trace Explanation Readiness
@@ -1605,16 +1605,16 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B8.5-T8
 - [x] B8.5-T9
 - [x] B8.5-T10
-- [ ] B8.6-T1
-- [ ] B8.6-T2
-- [ ] B8.6-T3
-- [ ] B8.6-T4
-- [ ] B8.6-T5
-- [ ] B8.6-T6
-- [ ] B8.6-T7
-- [ ] B8.6-T8
-- [ ] B8.6-T9
-- [ ] B8.6-T10
+- [x] B8.6-T1
+- [x] B8.6-T2
+- [x] B8.6-T3
+- [x] B8.6-T4
+- [x] B8.6-T5
+- [x] B8.6-T6
+- [x] B8.6-T7
+- [x] B8.6-T8
+- [x] B8.6-T9
+- [x] B8.6-T10
 - [ ] B9-T1
 - [ ] B9-T2
 - [ ] B9-T3

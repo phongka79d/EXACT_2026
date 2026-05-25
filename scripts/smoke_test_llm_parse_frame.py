@@ -1,4 +1,4 @@
-"""Credential-gated live parse-frame smoke check for Batch 5."""
+"""Credential-gated live parse-frame smoke check for Batch 8.6."""
 
 from __future__ import annotations
 

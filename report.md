@@ -831,3 +831,79 @@
 ### Notes for Next Batch
 - Batch 8.6 can proceed on the same numeric API and runtime contract while hardening parser prompts.
 - Numeric extraction/resolution/evaluation/routing boundaries are now explicit, so Batch 9+ can extend solver routing without re-expanding orchestration code.
+
+## Batch 8.6 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B8.6-T1: Complete.
+- B8.6-T2: Complete.
+- B8.6-T3: Complete.
+- B8.6-T4: Complete.
+- B8.6-T5: Complete.
+- B8.6-T6: Complete.
+- B8.6-T7: Complete.
+- B8.6-T8: Complete.
+- B8.6-T9: Complete.
+- B8.6-T10: Complete.
+
+### Files Created or Modified
+- app/llm/prompts.py
+- tests/test_llm_frame_extraction.py
+- scripts/smoke_test_llm_parse_frame.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- tests/test_llm_frame_extraction.py (299 lines): expanded prompt-contract regression tests and synthetic mocked frame coverage for rule/numeric/candidate scenarios.
+- task.md (1337 lines): updated only to mark Batch 8.6 completion checklist, batch/milestone status, and task IDs complete.
+- report.md (703 lines before this append): shared append-only execution log across completed batches.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_llm_frame_extraction.py` - Passed.
+- `python scripts/smoke_test_llm_parse_frame.py --env-path .env --timeout-seconds 20 --max-attempts 3` - Passed.
+- `python -m unittest` - Passed.
+
+### Acceptance Criteria Check
+- Prompts cover all approved frame kinds and slot types used by the runtime: Satisfied.
+- Numeric and nested premise guidance is explicit and not keyword-only or record-specific: Satisfied.
+- Prompts forbid final-answer generation and reference-only fields: Satisfied.
+- Prompt/cache version changes when prompt content changes: Satisfied (`PROMPT_VERSION` and `EXTRACTOR_VERSION` updated to `batch8_6_v1`).
+- Live parse-frame smoke passes with the configured model, or a sanitized blocker is reported: Satisfied (live smoke passed).
+
+### Artifacts Produced
+- Hardened premise, candidate, and repair prompt instructions in `app/llm/prompts.py`.
+- Updated prompt/extractor version values to force cache-key refresh for the new prompt contract.
+- Prompt regression tests covering schema, numeric guidance, no-answering/no-reference-field constraints.
+- Synthetic mocked parser tests for representative numeric rule and candidate numeric claim frames.
+- Live parse-frame smoke result showing successful configured-model extraction.
+
+### Checklist Update
+- Marked Batch 8.6 completion checklist items complete in `task.md`.
+- Marked `Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage` complete in the Progress Tracker.
+- Marked `M8.6 - LLM Parser Prompt Hardening` complete in the Progress Tracker.
+- Marked task IDs `B8.6-T1` through `B8.6-T10` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Kept schema/runtime contracts unchanged and focused Batch 8.6 on prompt hardening and validation coverage only.
+- Added explicit guidance for frame-kind selection, numeric slots, comparison phrases, units, nested/compound handling, and ambiguity fallback.
+- Strengthened repair prompts with mode-specific JSON templates to reduce malformed repair outputs while preserving deterministic validation gates.
+- Used a runtime-safe synthetic live smoke input and maintained credential-gated behavior without exposing secrets.
+
+### Risks or Open Issues
+- Live extraction still required one repair attempt in the passing smoke run, so model output-shape variability remains possible and should be monitored in Batch 9 integration tests.
+- Inaccessible temporary directories in repository root (`tmpexub70qe`, `tmprpdk9dj7`) remain unchanged and outside Batch 8.6 scope.
+
+### Minor Issues Fixed During Execution
+- Updated repair prompt contract after early live smoke failures to enforce required keys and stricter mode-specific JSON shapes.
+- Adjusted the live smoke sample text to a simpler synthetic numeric fact so the smoke test validates connectivity/contract reliably without broadening scope.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 8.6 prompt-hardening scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 9 can consume the hardened parser contract and cache-key versioning (`batch8_6_v1`) as its parse-frame baseline.
+- Next batch can proceed with Z3 routing and fallback additions without changing Batch 8.6 prompt/test boundaries.

@@ -3,8 +3,14 @@ import json
 import unittest
 from typing import Any
 
-from app.llm import FrameExtractionInput, LLMFrameExtractor, MockFrameExtractor
+from app.llm import FrameExtractionInput, LLMFrameExtractor, MockFrameExtractor, build_frame_cache_key
 from app.llm.errors import LLMTransientError
+from app.llm.prompts import (
+    EXTRACTOR_VERSION,
+    PROMPT_VERSION,
+    build_candidate_frame_messages,
+    build_premise_frame_messages,
+)
 
 
 class _ScriptedClient:
@@ -46,6 +52,72 @@ def _valid_fact_frame_payload(source_id: str = "premise_0001", premise_id: int =
     }
 
 
+class PromptContractTests(unittest.TestCase):
+    def test_premise_prompt_covers_schema_numeric_nested_and_safety_rules(self):
+        messages = build_premise_frame_messages(
+            source_text="Applications must be submitted at least 30 days before the review meeting.",
+            source_id="premise_1001",
+            premise_id=1001,
+        )
+
+        self.assertEqual(len(messages), 2)
+        combined = "\n".join(message["content"] for message in messages).lower()
+
+        for frame_kind in ("rule", "fact", "claim", "compound", "ambiguous"):
+            self.assertIn(frame_kind, combined)
+        for slot_type in ("predicate", "numeric_condition", "numeric_value", "arithmetic_expression", "entity_relation"):
+            self.assertIn(slot_type, combined)
+        for numeric_phrase in ("at least", "higher than", "lower than", "no more than", "within", "before", "after", "between"):
+            self.assertIn(numeric_phrase, combined)
+        for numeric_topic in ("gpa", "deadline", "duration", "fee", "threshold"):
+            self.assertIn(numeric_topic, combined)
+
+        self.assertIn("do not answer", combined)
+        self.assertIn("premises-fol", combined)
+        self.assertIn("explanation", combined)
+        self.assertIn("idx", combined)
+
+    def test_candidate_prompt_covers_claim_types_and_no_answering_rules(self):
+        messages = build_candidate_frame_messages(
+            source_text="Option A: The learner's GPA is at least 7.0.",
+            source_id="question",
+            candidate_label="A",
+        )
+
+        self.assertEqual(len(messages), 2)
+        combined = "\n".join(message["content"] for message in messages).lower()
+
+        self.assertIn("mcq", combined)
+        self.assertIn("yes_no_unknown", combined)
+        self.assertIn("numeric", combined)
+        self.assertIn("open_ended", combined)
+        self.assertIn("do not choose an option", combined)
+        self.assertIn("do not return yes/no", combined)
+
+    def test_prompt_version_changes_cache_key(self):
+        request = FrameExtractionInput(
+            mode="premise",
+            source_id="premise_1002",
+            premise_id=1002,
+            source_text="Learners must have at least 20 credits.",
+        )
+        current_key = build_frame_cache_key(
+            request,
+            model="qwen2.5-7b-instruct",
+            prompt_version=PROMPT_VERSION,
+            extractor_version=EXTRACTOR_VERSION,
+        )
+        previous_prompt_key = build_frame_cache_key(
+            request,
+            model="qwen2.5-7b-instruct",
+            prompt_version="batch8_5_v1",
+            extractor_version=EXTRACTOR_VERSION,
+        )
+
+        self.assertRegex(PROMPT_VERSION, r"batch8_6_v\d+")
+        self.assertNotEqual(current_key, previous_prompt_key)
+
+
 class MockFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
     async def test_mocked_valid_frame_succeeds(self):
         mock_extractor = MockFrameExtractor(default_response=_valid_fact_frame_payload())
@@ -62,6 +134,81 @@ class MockFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.frame.kind, "fact")
         self.assertEqual(result.diagnostics["model"], "mock")
         self.assertFalse(result.diagnostics["cache_hit"])
+
+    async def test_mocked_nested_numeric_rule_frame_succeeds(self):
+        mock_extractor = MockFrameExtractor(
+            responses={
+                "premise_2001": {
+                    "kind": "rule",
+                    "scope": "students",
+                    "if": [
+                        {
+                            "type": "numeric_condition",
+                            "entity": "student",
+                            "attribute": "entrance_score",
+                            "op": ">=",
+                            "expression": {
+                                "type": "arithmetic_expression",
+                                "op": "percentage_of",
+                                "operands": [{"value": 75, "unit": "percent"}, {"attribute": "standard_score"}],
+                            },
+                        }
+                    ],
+                    "then": [{"type": "predicate", "entity": "student", "name": "eligible_for_scholarship"}],
+                    "source_id": "premise_2001",
+                    "source_text": "If a student scores at least 75% of the standard score, then the student is eligible for the scholarship.",
+                    "premise_id": 2001,
+                    "warnings": [],
+                }
+            }
+        )
+
+        result = await mock_extractor.extract_frame(
+            FrameExtractionInput(
+                mode="premise",
+                source_id="premise_2001",
+                premise_id=2001,
+                source_text="If a student scores at least 75% of the standard score, then the student is eligible for the scholarship.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "rule")
+        self.assertEqual(result.frame.if_slots[0].type, "numeric_condition")
+        self.assertEqual(result.frame.then_slots[0].type, "predicate")
+
+    async def test_mocked_candidate_numeric_claim_succeeds(self):
+        mock_extractor = MockFrameExtractor(
+            responses={
+                "candidate_A": {
+                    "kind": "claim",
+                    "answer_type": "numeric",
+                    "claim": {
+                        "type": "numeric_condition",
+                        "entity": "student",
+                        "attribute": "cumulative_gpa",
+                        "op": ">=",
+                        "value": 7.0,
+                    },
+                    "source_id": "candidate_A",
+                    "source_text": "Option A: The student has a cumulative GPA of at least 7.0.",
+                    "candidate_label": "A",
+                    "warnings": [],
+                }
+            }
+        )
+
+        result = await mock_extractor.extract_frame(
+            FrameExtractionInput(
+                mode="candidate",
+                source_id="candidate_A",
+                candidate_label="A",
+                source_text="Option A: The student has a cumulative GPA of at least 7.0.",
+            )
+        )
+
+        self.assertEqual(result.frame.kind, "claim")
+        self.assertEqual(result.frame.answer_type, "numeric")
+        self.assertEqual(result.frame.claim.type, "numeric_condition")
 
 
 class LLMFrameExtractorTests(unittest.IsolatedAsyncioTestCase):

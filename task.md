@@ -80,6 +80,8 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
   - Batch 7 complete. Numeric evidence and derived facts are extracted with provenance.
 - M8 - Core Symbolic Reasoning
   - Batch 8 complete. Horn, safe contraposition, bounded quantifiers, and answer decision work.
+- M8.5 - Numeric Layer Maintainability
+  - Batch 8.5 complete. The Batch 7 numeric layer is split into focused modules without changing runtime behavior.
 - M9 - Extended Verification
   - Batch 9 complete. Z3 routing and confidence-capped fallback cover supported harder fragments.
 - M10 - Public Output Layer
@@ -100,11 +102,12 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
 5. Batch 5 -> Batch 6
 6. Batch 6 -> Batch 7
 7. Batch 7 -> Batch 8
-8. Batch 8 -> Batch 9
-9. Batch 9 -> Batch 10
-10. Batch 10 -> Batch 11
-11. Batch 11 -> Batch 12
-12. Batch 12 -> Batch 13
+8. Batch 8 -> Batch 8.5
+9. Batch 8.5 -> Batch 9
+10. Batch 9 -> Batch 10
+11. Batch 10 -> Batch 11
+12. Batch 11 -> Batch 12
+13. Batch 12 -> Batch 13
 
 ## Mandatory Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
 
@@ -706,6 +709,90 @@ The system needs deterministic proof-backed reasoning before extended Z3/fallbac
 - [ ] Answer decision works.
 - [ ] `report.md` contains Batch 8 result.
 
+## Mandatory Batch 8.5 - Numeric Layer Modularization and Maintainability
+
+### Goal
+
+Split the large Batch 7 numeric layer into focused modules while preserving the exact runtime contract consumed by Batch 8 and required by Batch 9.
+
+### Why this batch exists
+
+Batch 7 intentionally kept numeric extraction, merge logic, deterministic evaluation, routing, and orchestration in one module for fast review. After Batch 8 proves the solver handoff contract, the numeric layer should be made maintainable before Z3 and fallback logic build on top of it. This batch reduces file size and responsibility concentration without changing scoring behavior.
+
+### Inputs / Dependencies
+
+- Batches 1-8 outputs.
+- Existing `app/numeric/` package from Batch 7.
+- Batch 8 solver integration points that consume numeric facts, derived facts, proof trace steps, and Z3 constraint candidates.
+- `flow.md` numeric layer and proof-trace requirements.
+- `PLAN.md` numeric reasoning and maintainability requirements.
+
+### Exact Task List
+
+- B8.5-T1: Inventory current `app/numeric/layer.py` responsibilities and document the intended split in `report.md`.
+- B8.5-T2: Keep the public numeric API stable, especially `from app.numeric import build_numeric_layer` and `NumericLayerResult`.
+- B8.5-T3: Move frame, AST, and source-text extraction helpers into a focused numeric extraction module.
+- B8.5-T4: Move AST/frame/source precedence, conflict detection, and supplemental comparison selection into a focused merge or resolution module.
+- B8.5-T5: Move deterministic arithmetic and comparison evaluation into a focused evaluator module.
+- B8.5-T6: Move Z3-compatible numeric constraint candidate construction/routing helpers into a focused routing module.
+- B8.5-T7: Reduce `app/numeric/layer.py` to a thin orchestration module that wires extraction, resolution, evaluation, solver context, and result creation.
+- B8.5-T8: Preserve all provenance fields, warnings, conflict traces, derived facts, and solver-context keys exactly unless a failing test proves a correction is required.
+- B8.5-T9: Add or update tests that prove behavior is unchanged for numeric extraction, duplicate source-text suppression, conflict precedence, arithmetic evaluation, and Z3 candidate routing.
+- B8.5-T10: Append Batch 8.5 execution details to `report.md`, including every touched file over 200 lines with line count and rationale.
+
+### Files or Modules Likely Created or Updated
+
+- `app/numeric/layer.py`
+- `app/numeric/extractors.py`
+- `app/numeric/resolution.py`
+- `app/numeric/evaluator.py`
+- `app/numeric/routing.py`
+- `app/numeric/__init__.py`
+- `tests/test_numeric_layer.py`
+- Optional focused numeric test files if splitting tests improves clarity.
+- `report.md`
+- `task.md`
+
+### Required Outputs / Artifacts
+
+- Modular numeric package with focused extraction, resolution, evaluation, routing, and orchestration responsibilities.
+- Stable public numeric API for pipeline and solver consumers.
+- Reduced `app/numeric/layer.py` orchestration file.
+- Regression coverage proving no behavior drift.
+- Batch 8.5 report entry.
+
+### Acceptance Criteria
+
+- `app/numeric/layer.py` is reduced to thin orchestration and should be under 200 lines unless a clear rationale is reported.
+- Numeric layer output shape remains compatible with Batch 8 and Batch 9 consumers.
+- Existing numeric tests still pass without weakening assertions.
+- Source-text supplemental extraction remains supplemental and does not duplicate authoritative AST/frame comparisons.
+- No record ID, question ID, entity-list, answer-label, gold answer, `premises-FOL`, or explanation shortcut is introduced.
+- Any touched file over 200 lines is reported in `report.md`.
+
+### Required Tests or Validations
+
+- `python -m unittest tests/test_numeric_layer.py`
+- `python -m unittest tests/test_async_pipeline.py`
+- `python -m unittest`
+- Optional targeted import/API smoke check if module boundaries change.
+
+### Explicit Non-Goals
+
+- Do not add new solver capabilities beyond preserving the Batch 8 contract.
+- Do not implement Batch 9 Z3 adapter, semantic fallback, or nested implication routing.
+- Do not change answer decision behavior.
+- Do not call the LLM or API for this refactor unless an existing smoke command explicitly requires it.
+- Do not use dataset-specific examples to justify module boundaries.
+
+### Completion Checklist
+
+- [ ] Numeric responsibilities are split into focused modules.
+- [ ] `app/numeric/layer.py` is a thin orchestration layer.
+- [ ] Public numeric imports remain stable.
+- [ ] Numeric behavior regression tests pass.
+- [ ] `report.md` contains Batch 8.5 result and file-size notes.
+
 ## Mandatory Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 
 ### Goal
@@ -718,7 +805,7 @@ Some dataset questions include arithmetic, grounded Boolean constraints, or nest
 
 ### Inputs / Dependencies
 
-- Batches 1-8 outputs.
+- Batches 1-8.5 outputs.
 - `PLAN.md` Z3 and semantic fallback sections.
 - `flow.md` symbolic verification section.
 
@@ -1101,7 +1188,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - Batch 5 -> Batch 6: parse-frame extractor before async orchestration.
 - Batch 6 -> Batch 7: pipeline before numeric layer integration.
 - Batch 7 -> Batch 8: numeric facts before core symbolic answer decision.
-- Batch 8 -> Batch 9: core symbolic solver before Z3/fallback extensions.
+- Batch 8 -> Batch 8.5: core symbolic solver before numeric layer refactor, so the refactor preserves a proven solver handoff contract.
+- Batch 8.5 -> Batch 9: maintainable numeric modules before Z3/fallback extensions build on numeric constraint candidates.
 - Batch 9 -> Batch 10: solver results before public explanations and adapters.
 - Batch 10 -> Batch 11: output formatter before API endpoint.
 - Batch 11 -> Batch 12: API/runtime path before local evaluation and scoring.
@@ -1147,6 +1235,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
 - [x] Batch 7 - Numeric Layer with Source Provenance
 - [ ] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
+- [ ] Batch 8.5 - Numeric Layer Modularization and Maintainability
 - [ ] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 - [ ] Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 - [ ] Batch 11 - API Endpoint
@@ -1163,6 +1252,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M6 - Async Runtime Skeleton
 - [x] M7 - Numeric Reasoning Layer
 - [ ] M8 - Core Symbolic Reasoning
+- [ ] M8.5 - Numeric Layer Maintainability
 - [ ] M9 - Extended Verification
 - [ ] M10 - Public Output Layer
 - [ ] M11 - Submission API
@@ -1257,6 +1347,16 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] B8-T11
 - [ ] B8-T12
 - [ ] B8-T13
+- [ ] B8.5-T1
+- [ ] B8.5-T2
+- [ ] B8.5-T3
+- [ ] B8.5-T4
+- [ ] B8.5-T5
+- [ ] B8.5-T6
+- [ ] B8.5-T7
+- [ ] B8.5-T8
+- [ ] B8.5-T9
+- [ ] B8.5-T10
 - [ ] B9-T1
 - [ ] B9-T2
 - [ ] B9-T3

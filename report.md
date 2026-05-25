@@ -436,3 +436,102 @@
 - No overfit or hardcode shortcut was introduced.
 - `.env` secrets were not logged or written.
 - Live parse-frame smoke still uses the configured `.env` model and sanitized output only.
+## Batch 6 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B6-T1: Complete.
+- B6-T2: Complete.
+- B6-T3: Complete.
+- B6-T4: Complete.
+- B6-T5: Complete.
+- B6-T6: Complete.
+- B6-T7: Complete.
+- B6-T8: Complete.
+- B6-T9: Complete.
+- B6-T10: Complete.
+- B6-T11: Complete.
+
+### Files Created or Modified
+- app/pipeline/__init__.py
+- app/pipeline/models.py
+- app/pipeline/runtime.py
+- app/pipeline/artifacts.py
+- scripts/evaluate_local.py
+- tests/test_async_pipeline.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/pipeline/runtime.py (412 lines): keeps Batch 6 orchestration, timeout handling, dual cache modes, single-flight behavior, and failure-safe trace construction in one implementation module.
+- task.md (1376 lines): updated only to mark Batch 6 checklist, batch/milestone status, and task IDs as complete.
+- report.md (438 lines before this append): shared cumulative execution report file that is intentionally append-only across batches.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_async_pipeline.py` - Passed.
+- `python -m unittest` - Passed.
+
+### Acceptance Criteria Check
+- Concurrent local samples sharing a record trigger one premise conversion: Satisfied (`tests/test_async_pipeline.py::test_concurrent_local_samples_share_premise_conversion`).
+- Repeated API-style requests with same premise text trigger one premise conversion: Satisfied (`tests/test_async_pipeline.py::test_repeated_api_requests_share_premise_conversion_with_single_flight`).
+- Failed samples produce traceable artifacts and do not stop the batch: Satisfied (failure isolation + artifact-write coverage in `tests/test_async_pipeline.py`).
+- Output order is deterministic: Satisfied (`tests/test_async_pipeline.py` validates sorting by `record_id`, then `question_id`).
+
+### Artifacts Produced
+- New async pipeline package under `app/pipeline/` with:
+  - bounded local scheduler;
+  - API single-query entrypoint;
+  - local/API premise cache key orchestration;
+  - single-flight lock behavior;
+  - per-request and per-sample timeout handling;
+  - failure-isolated results and solver-handoff trace generation.
+- Preliminary artifact writer producing `predictions.json` and `debug_traces.jsonl`.
+- Local execution script `scripts/evaluate_local.py` for Batch 6 orchestration output.
+- Batch 6 test suite `tests/test_async_pipeline.py`.
+
+### Checklist Update
+- Marked Batch 6 completion checklist items as complete in `task.md`.
+- Marked `Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks` complete in the Progress Tracker.
+- Marked `M6 - Async Runtime Skeleton` complete in the Progress Tracker.
+- Marked task IDs `B6-T1` through `B6-T11` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Kept Batch 6 scope strict by stopping at solver handoff and returning partial results with `solver_capability_gap` instead of adding early solver behavior.
+- Implemented premise reuse with one cache abstraction over two key modes (`record:<record_id>` and `premises_hash:<hash>`), guarded by per-key single-flight locks.
+- Added both per-frame request timeout and end-to-end sample timeout paths so slow external calls cannot block the full local batch.
+- Wrote prediction and debug artifacts for both partial and failed samples to preserve traceability for downstream batches.
+
+### Risks or Open Issues
+- `app/pipeline/runtime.py` is over 200 lines; if Batch 7+ expands orchestration further, splitting stage handlers into smaller modules may improve maintainability.
+- `scripts/evaluate_local.py` depends on configured live provider access for real execution and was not run in this batch (unit tests used mock extractors).
+- Existing inaccessible temporary directories in repository root (`tmpexub70qe`, `tmprpdk9dj7`) remain unchanged and outside Batch 6 scope.
+
+### Minor Issues Fixed During Execution
+- None.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed (pipeline inputs are `LocalRuntimeSample`/`RuntimeQuery`; no runtime path reads `premises-FOL`, `answer`, `explanation`, or `idx`).
+- No overfit or hardcode shortcut was introduced: Confirmed (no record/question-ID-specific logic).
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 6 async orchestration scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 7 can plug numeric extraction/evaluation into the existing solver-handoff stage without changing cache/scheduler contracts.
+- Existing traces already carry cache, candidate, and handoff metadata needed to attribute numeric-stage failures.
+- Next batch can proceed.
+
+### Post-Batch 6 Verification Rerun - 2026-05-25
+
+#### Additional Tests or Validations Run
+- `python -m unittest tests.test_async_pipeline` - Passed.
+- `python -m unittest` - Passed.
+- `python scripts/evaluate_local.py --input tests/fixtures/flattened_runtime_loader_fixture.json --output-dir .pytest_tmp_batch6_eval_smoke --env-path .env --max-concurrency 1 --request-timeout-seconds 20 --sample-timeout-seconds 60 --max-attempts 2` - Ran successfully and wrote artifacts; the single sample failed before solver handoff because the fixture premise text is intentionally synthetic/underspecified (`Premise 1`), producing a traceable `llm_frame_error`.
+- `python scripts/evaluate_local.py --input .pytest_tmp_batch6_live_input.json --output-dir .pytest_tmp_batch6_eval_success --env-path .env --max-concurrency 1 --request-timeout-seconds 20 --sample-timeout-seconds 60 --max-attempts 2` - Passed live success-path smoke with `total_samples=1`, `partial_samples=1`, `failed_samples=0`, and `solver_handoff_ready=true`.
+
+#### Artifact and Secret Check
+- Temporary smoke artifacts were inspected and then removed.
+- The success-path smoke output did not contain `SENTINEL_FOL`, `SENTINEL_ANSWER`, `SENTINEL_EXPLANATION`, `SENTINEL_IDX`, raw API keys, or raw `.env` values.
+
+#### Updated Status
+- `scripts/evaluate_local.py` has now been exercised with live provider access on a tiny runtime-safe fixture.
+- Batch 6 remains stopped at solver handoff as designed; final answer solving is still scheduled for later batches.

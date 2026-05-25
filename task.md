@@ -547,11 +547,11 @@ The project will call an LLM through an API key. Without async execution and sha
 
 ### Completion Checklist
 
-- [ ] Async scheduler exists.
-- [ ] Local/API cache modes exist.
-- [ ] Single-flight locks are tested.
-- [ ] Failure isolation works.
-- [ ] `report.md` contains Batch 6 result.
+- [x] Async scheduler exists.
+- [x] Local/API cache modes exist.
+- [x] Single-flight locks are tested.
+- [x] Failure isolation works.
+- [x] `report.md` contains Batch 6 result.
 
 ## Mandatory Batch 7 - Numeric Layer with Source Provenance
 
@@ -1144,7 +1144,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
 - [x] Batch 4 - Debug Trace and Proof Trace Infrastructure
 - [x] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
-- [ ] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
+- [x] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
 - [ ] Batch 7 - Numeric Layer with Source Provenance
 - [ ] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
 - [ ] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
@@ -1160,7 +1160,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M3 - Logic Representation Contract
 - [x] M4 - Observability Foundation
 - [x] M5 - LLM Semantic Parser
-- [ ] M6 - Async Runtime Skeleton
+- [x] M6 - Async Runtime Skeleton
 - [ ] M7 - Numeric Reasoning Layer
 - [ ] M8 - Core Symbolic Reasoning
 - [ ] M9 - Extended Verification
@@ -1222,17 +1222,17 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B5-T10
 - [x] B5-T11
 - [x] B5-T12
-- [ ] B6-T1
-- [ ] B6-T2
-- [ ] B6-T3
-- [ ] B6-T4
-- [ ] B6-T5
-- [ ] B6-T6
-- [ ] B6-T7
-- [ ] B6-T8
-- [ ] B6-T9
-- [ ] B6-T10
-- [ ] B6-T11
+- [x] B6-T1
+- [x] B6-T2
+- [x] B6-T3
+- [x] B6-T4
+- [x] B6-T5
+- [x] B6-T6
+- [x] B6-T7
+- [x] B6-T8
+- [x] B6-T9
+- [x] B6-T10
+- [x] B6-T11
 - [ ] B7-T1
 - [ ] B7-T2
 - [ ] B7-T3

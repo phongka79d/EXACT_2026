@@ -907,3 +907,96 @@
 ### Notes for Next Batch
 - Batch 9 can consume the hardened parser contract and cache-key versioning (`batch8_6_v1`) as its parse-frame baseline.
 - Next batch can proceed with Z3 routing and fallback additions without changing Batch 8.6 prompt/test boundaries.
+
+## Batch 9 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B9-T1: Complete.
+- B9-T2: Complete.
+- B9-T3: Complete.
+- B9-T4: Complete.
+- B9-T5: Complete.
+- B9-T6: Complete.
+- B9-T7: Complete.
+- B9-T8: Complete.
+- B9-T9: Complete.
+- B9-T10: Complete.
+- B9-T11: Complete.
+
+### Files Created or Modified
+- app/solver/horn/models.py
+- app/solver/__init__.py
+- app/solver/router/__init__.py
+- app/solver/z3_adapter/__init__.py
+- app/solver/semantic_fallback/__init__.py
+- app/pipeline/runtime.py
+- tests/test_solver_routing.py
+- tests/test_z3_adapter.py
+- tests/test_semantic_fallback.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/solver/z3_adapter/__init__.py (225 lines): contains grounded-boolean satisfiability checks plus numeric-expression evaluation used by the Z3-compatible adapter contract.
+- app/pipeline/runtime.py (734 lines): existing async pipeline file updated to integrate route/fallback metadata into solver stage and proof traces while preserving prior behavior.
+- task.md (1684 lines): updated only to mark Batch 9 checklist, batch/milestone status, and task IDs complete.
+- report.md (896 lines before this append): shared append-only execution report file.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_solver_routing.py` - Passed.
+- `python -m unittest tests/test_z3_adapter.py` - Passed.
+- `python -m unittest tests/test_semantic_fallback.py` - Passed.
+- `python -m unittest tests/test_async_pipeline.py` - Passed.
+- `python -m unittest tests/test_horn_solver.py tests/test_answer_decision.py` - Passed.
+- `python -m unittest` - Passed (101 tests).
+
+### Acceptance Criteria Check
+- Z3 handles supported numeric and grounded nested implication cases: Satisfied (new adapter tests cover numeric and grounded nested implication entailment).
+- Unsupported nested implication returns `solver_capability_gap`: Satisfied (router + adapter tests cover unsupported ungrounded/nested cases with explicit capability-gap signaling).
+- Fallback cannot override symbolic proof: Satisfied (routing tests confirm Horn proofs remain authoritative and do not trigger fallback override).
+- Fallback confidence is capped and trace-visible: Satisfied (semantic fallback caps confidence below symbolic confidence and pipeline trace metadata now records fallback usage, penalties, and Z3 status).
+
+### Artifacts Produced
+- New solver router:
+  - `app/solver/router/__init__.py`
+- New Z3-compatible adapter:
+  - `app/solver/z3_adapter/__init__.py`
+- New semantic fallback verifier:
+  - `app/solver/semantic_fallback/__init__.py`
+- Pipeline trace enrichment for route/Z3/fallback/confidence metadata:
+  - `app/pipeline/runtime.py`
+- New Batch 9 tests:
+  - `tests/test_solver_routing.py`
+  - `tests/test_z3_adapter.py`
+  - `tests/test_semantic_fallback.py`
+
+### Checklist Update
+- Marked Batch 9 completion checklist items complete in `task.md`.
+- Marked `Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback` complete in the Progress Tracker.
+- Marked `M9 - Extended Verification` complete in the Progress Tracker.
+- Marked task IDs `B9-T1` through `B9-T11` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Kept Horn proving as the first route for Horn-compatible claims and introduced explicit routing into `horn`, `z3`, and `semantic_fallback`.
+- Implemented a deterministic Z3-compatible grounded-formula evaluator (Boolean + numeric expression support) to keep runtime behavior testable and traceable without introducing hidden heuristics.
+- Restricted nested implication support to grounded finite formulas; ungrounded/nested meta-logic now emits explicit capability-gap signals instead of silent guessing.
+- Enforced fallback confidence caps and propagated route metadata (`z3_status`, `fallback_used`, `confidence_penalty`) into solver trace/proof metadata.
+
+### Risks or Open Issues
+- The new adapter is intentionally scoped to grounded finite fragments; broader first-order/meta-logic remains out of scope and should continue to surface as capability gaps.
+- Semantic fallback is token-overlap based and intentionally conservative; later batches can enrich explanation-facing citation quality without changing this confidence cap rule.
+- Inaccessible temporary directories in repository root (`tmpexub70qe`, `tmprpdk9dj7`) remain unchanged and outside Batch 9 scope.
+
+### Minor Issues Fixed During Execution
+- Fixed router metadata wiring bug where the `z3_status` argument was missing in one success path.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 9 solver-routing scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 9.5 can proceed and enrich citation/source-text metadata across Horn, Z3, unsupported-route, and fallback proof steps without changing answer-decision semantics.
+- Next batch should consume the new solver route metadata already present in pipeline traces (`primary_route`, `route_counts`, `z3_statuses`, `fallback_used_count`, `confidence_penalties`).

@@ -949,11 +949,11 @@ Some dataset questions include arithmetic, grounded Boolean constraints, or nest
 
 ### Completion Checklist
 
-- [ ] Solver router exists.
-- [ ] Z3 adapter handles supported fragments.
-- [ ] Unsupported fragments are explicit.
-- [ ] Semantic fallback is confidence-capped.
-- [ ] `report.md` contains Batch 9 result.
+- [x] Solver router exists.
+- [x] Z3 adapter handles supported fragments.
+- [x] Unsupported fragments are explicit.
+- [x] Semantic fallback is confidence-capped.
+- [x] `report.md` contains Batch 9 result.
 
 ## Mandatory Batch 9.5 - Solver Citation Source-Text Enrichment
 
@@ -1479,7 +1479,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
 - [x] Batch 8.5 - Numeric Layer Modularization and Maintainability
 - [x] Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
-- [ ] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
+- [x] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 - [ ] Batch 9.5 - Solver Citation Source-Text Enrichment
 - [ ] Batch 9.6 - Proof Trace Explanation Readiness
 - [ ] Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
@@ -1499,7 +1499,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M8 - Core Symbolic Reasoning
 - [x] M8.5 - Numeric Layer Maintainability
 - [x] M8.6 - LLM Parser Prompt Hardening
-- [ ] M9 - Extended Verification
+- [x] M9 - Extended Verification
 - [ ] M9.5 - Solver Citation Enrichment
 - [ ] M9.6 - Proof Trace Explanation Readiness
 - [ ] M10 - Public Output Layer
@@ -1615,17 +1615,17 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B8.6-T8
 - [x] B8.6-T9
 - [x] B8.6-T10
-- [ ] B9-T1
-- [ ] B9-T2
-- [ ] B9-T3
-- [ ] B9-T4
-- [ ] B9-T5
-- [ ] B9-T6
-- [ ] B9-T7
-- [ ] B9-T8
-- [ ] B9-T9
-- [ ] B9-T10
-- [ ] B9-T11
+- [x] B9-T1
+- [x] B9-T2
+- [x] B9-T3
+- [x] B9-T4
+- [x] B9-T5
+- [x] B9-T6
+- [x] B9-T7
+- [x] B9-T8
+- [x] B9-T9
+- [x] B9-T10
+- [x] B9-T11
 - [ ] B9.5-T1
 - [ ] B9.5-T2
 - [ ] B9.5-T3

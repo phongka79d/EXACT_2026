@@ -19,7 +19,7 @@ from app.logic.frames import ParseFrame
 from app.numeric import NumericLayerResult, build_numeric_layer
 from app.output.decision import CandidateEntailment, decide_answer
 from app.questions import extract_candidates
-from app.solver import prove_entailment
+from app.solver import SolverRequest, prove_entailment
 from app.tracing import CacheMetadata, DebugTrace, NumericDerivation, ProofTraceStep, SourceCitation, TraceStage
 
 from .models import PipelineSampleResult
@@ -213,7 +213,13 @@ class AsyncRuntimePipeline:
                 stages=stages,
             )
 
-        entailments, solver_stage = self._run_symbolic_solver(premise_bundle.asts, candidate_result, candidate_asts)
+        entailments, solver_stage = self._run_symbolic_solver(
+            premise_bundle.asts,
+            candidate_result,
+            candidate_asts,
+            numeric_result=numeric_result,
+            premises_nl=context.premises_nl,
+        )
         stages.append(solver_stage)
         if solver_stage.status == "failed":
             message = solver_stage.warnings[0] if solver_stage.warnings else "Symbolic solver failed"
@@ -285,7 +291,7 @@ class AsyncRuntimePipeline:
                 "candidate_count": len(candidate_result.candidates),
                 "numeric_fact_count": len(numeric_result.solver_context.get("numeric_facts", [])),
                 "z3_constraint_count": len(numeric_result.z3_constraints),
-                "solver_route": "horn",
+                "solver_route": solver_stage.metadata.get("primary_route", "horn"),
             },
         )
         return PipelineSampleResult(
@@ -401,15 +407,35 @@ class AsyncRuntimePipeline:
             },
         )
 
-    def _run_symbolic_solver(self, premise_asts, candidate_result, candidate_asts):
+    def _run_symbolic_solver(self, premise_asts, candidate_result, candidate_asts, *, numeric_result: NumericLayerResult, premises_nl: Sequence[str]):
         stage_start = time.perf_counter()
         entailments: list[CandidateEntailment] = []
         warnings: list[str] = []
+        route_counts: dict[str, int] = {}
+        z3_statuses: set[str] = set()
+        fallback_used_count = 0
+        confidence_penalties: list[float] = []
         try:
             for candidate, candidate_ast in zip(candidate_result.candidates, candidate_asts, strict=True):
-                claim_result = prove_entailment(premise_asts, candidate_ast)
+                claim_result = prove_entailment(
+                    SolverRequest(
+                        premise_asts=premise_asts,
+                        claim_ast=candidate_ast,
+                        numeric_context=numeric_result.solver_context,
+                        premises_nl=premises_nl,
+                        candidate_text=candidate.text,
+                    )
+                )
                 negated_claim = _negate_claim(candidate_ast)
-                negated_result = prove_entailment(premise_asts, negated_claim)
+                negated_result = prove_entailment(
+                    SolverRequest(
+                        premise_asts=premise_asts,
+                        claim_ast=negated_claim,
+                        numeric_context=numeric_result.solver_context,
+                        premises_nl=premises_nl,
+                        candidate_text=f"not ({candidate.text})",
+                    )
+                )
                 entailments.append(
                     CandidateEntailment(
                         label=candidate.label,
@@ -422,6 +448,15 @@ class AsyncRuntimePipeline:
                 warnings.extend(claim_result.unsupported_features)
                 warnings.extend(negated_result.warnings)
                 warnings.extend(negated_result.unsupported_features)
+                for result in (claim_result, negated_result):
+                    route_counts[result.route] = route_counts.get(result.route, 0) + 1
+                    z3_status = result.solver_metadata.get("z3_status")
+                    if isinstance(z3_status, str) and z3_status:
+                        z3_statuses.add(z3_status)
+                    if bool(result.solver_metadata.get("fallback_used")):
+                        fallback_used_count += 1
+                    if result.confidence_penalty > 0:
+                        confidence_penalties.append(result.confidence_penalty)
         except Exception as exc:
             return [], TraceStage(
                 name="symbolic_solver",
@@ -434,6 +469,9 @@ class AsyncRuntimePipeline:
         stage_status: Literal["ok", "partial"] = "ok"
         if any(item.claim_result.status != "ok" or item.negated_claim_result.status != "ok" for item in entailments):
             stage_status = "partial"
+        primary_route = "mixed"
+        if route_counts:
+            primary_route = sorted(route_counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
         return entailments, TraceStage(
             name="symbolic_solver",
             status=stage_status,
@@ -442,6 +480,11 @@ class AsyncRuntimePipeline:
             metadata={
                 "candidate_count": len(entailments),
                 "question_type": candidate_result.question_type,
+                "route_counts": route_counts,
+                "primary_route": primary_route,
+                "z3_statuses": sorted(z3_statuses),
+                "fallback_used_count": fallback_used_count,
+                "confidence_penalties": confidence_penalties,
             },
         )
 
@@ -502,6 +545,11 @@ class AsyncRuntimePipeline:
             metadata={
                 "candidate_label": candidate_label,
                 "entailed": result.entailed,
+                "confidence": result.confidence,
+                "confidence_penalty": result.confidence_penalty,
+                "z3_status": result.solver_metadata.get("z3_status"),
+                "fallback_used": bool(result.solver_metadata.get("fallback_used")),
+                "original_route": result.solver_metadata.get("original_route"),
             },
         )
 

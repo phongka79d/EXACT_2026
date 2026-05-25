@@ -80,3 +80,6 @@ class HornEntailmentResult:
     warnings: list[str] = field(default_factory=list)
     unsupported_features: list[str] = field(default_factory=list)
     route: str = "horn"
+    confidence: float = 1.0
+    confidence_penalty: float = 0.0
+    solver_metadata: dict[str, object] = field(default_factory=dict)

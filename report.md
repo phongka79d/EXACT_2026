@@ -535,3 +535,102 @@
 #### Updated Status
 - `scripts/evaluate_local.py` has now been exercised with live provider access on a tiny runtime-safe fixture.
 - Batch 6 remains stopped at solver handoff as designed; final answer solving is still scheduled for later batches.
+
+## Batch 7 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B7-T1: Complete.
+- B7-T2: Complete.
+- B7-T3: Complete.
+- B7-T4: Complete.
+- B7-T5: Complete.
+- B7-T6: Complete.
+- B7-T7: Complete.
+- B7-T8: Complete.
+- B7-T9: Complete.
+- B7-T10: Complete.
+- B7-T11: Complete.
+
+### Files Created or Modified
+- app/numeric/__init__.py
+- app/numeric/models.py
+- app/numeric/layer.py
+- app/pipeline/runtime.py
+- tests/test_numeric_layer.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/numeric/layer.py (932 lines): kept extraction, deterministic arithmetic evaluation, conflict handling, supplemental source parsing, and Z3-compatible routing in one module for Batch 7 traceability and deterministic review.
+- app/pipeline/runtime.py (533 lines): remains the central runtime orchestrator and now includes the numeric stage and proof-trace handoff metadata.
+- tests/test_numeric_layer.py (295 lines): concentrated Batch 7 scenario coverage (percentages, averages, weighted scores, thresholds, durations, routing, and anti-hardcode checks) in one focused suite.
+- task.md (1376 lines): updated only for Batch 7 checklist, milestone, batch, and task-ID completion status.
+- report.md (621 lines): shared append-only execution report across batches.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_numeric_layer.py` - Passed.
+- `python -m unittest tests/test_async_pipeline.py` - Passed.
+- `python -m unittest` - Passed.
+
+### Acceptance Criteria Check
+- Numeric derived facts cite their source premises/candidates: Satisfied (all derived facts carry source provenance and are emitted into solver context/proof trace metadata).
+- Percentages, averages, thresholds, and time comparisons are covered: Satisfied (deterministic evaluator covers `percentage_of`, `average`, `weighted_average`, and `time_add` with test coverage).
+- Numeric parse failures produce traceable warnings: Satisfied (numeric-signal-without-parse paths emit source-scoped warnings).
+- No numeric route depends on sample ID, record ID, question ID, or gold answer: Satisfied (routing uses frame/AST/source numeric features only; anti-hardcode ID-independence test added).
+
+### Artifacts Produced
+- New numeric package `app/numeric` with:
+  - typed provenance/quantity/comparison/conflict/Z3-candidate models;
+  - deterministic numeric layer that extracts from frames and AST;
+  - source-text supplemental extraction with span provenance;
+  - arithmetic evaluator and comparison evaluator;
+  - AST-vs-source conflict tracing with AST preference.
+- Pipeline integration of a numeric stage before solver handoff, including solver-context injection and proof-trace numeric derivations.
+- Batch 7 test suite: `tests/test_numeric_layer.py`.
+
+### Checklist Update
+- Marked Batch 7 completion checklist items complete in `task.md`.
+- Marked `Batch 7 - Numeric Layer with Source Provenance` complete in the Progress Tracker.
+- Marked `M7 - Numeric Reasoning Layer` complete in the Progress Tracker.
+- Marked task IDs `B7-T1` through `B7-T11` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Enforced precedence order `AST > frame > source-text` for numeric facts to preserve deterministic compiler authority while still using source supplements when detail is missing.
+- Kept source-text extraction supplemental only; conflicting values are traced and never override validated AST values.
+- Routed unresolved/unsupported numeric comparisons into explicit Z3-compatible constraint candidates rather than forcing heuristic outcomes.
+- Added numeric proof-trace steps and solver-context payloads at runtime handoff without implementing Batch 8 symbolic solving logic early.
+
+### Risks or Open Issues
+- Source-text supplemental parsing is intentionally conservative regex-based logic; it can over-collect generic numeric mentions, but conflicts are traced and authoritative AST values are preserved.
+- `app/numeric/layer.py` is large; if Batch 8+ extends numeric logic further, splitting extraction/evaluation/routing helpers may improve maintainability.
+
+### Minor Issues Fixed During Execution
+- Fixed numeric expression lookup so unit-bearing facts (for example percent values) can still satisfy unit-unspecified references.
+- Fixed left-expression rendering and AST traversal in numeric extraction to ensure compare/arithmetic nodes are discovered consistently.
+- Added guard to avoid treating frame-only arithmetic-slot traces as deterministic-evaluation failures when AST-based evaluation already governs arithmetic outcomes.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 7 numeric-layer scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 8 can consume `numeric_solver_context`, numeric derived facts, and numeric proof-trace steps now present at solver handoff.
+- Hard numeric constraints are already surfaced as explicit Z3-compatible candidates for downstream router/prover integration.
+- Next batch can proceed.
+
+## Post-Batch 7 Review Fix - Source-Text Comparison Supplement
+
+### Issue
+- Review found that source-text supplemental comparisons were always appended after AST/frame comparisons, which could over-collect duplicate generic comparisons even when validated AST/frame constraints already contained the same numeric detail.
+
+### Fix
+- Added comparison selection logic so source-text comparisons are only kept when they are not already covered by an authoritative AST/frame comparison from the same source target.
+- Coverage is checked by source target, operator, numeric right-hand value, and compatible attributes.
+- Added a regression test proving a validated `total_days <= 30 days` frame/AST suppresses duplicate source-text `within 30 days` comparison extraction.
+
+### Validation
+- `python -m unittest tests.test_numeric_layer` - Passed.
+- `python -m unittest` - Passed.

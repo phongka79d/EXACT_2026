@@ -16,8 +16,9 @@ from app.llm.extractor import FrameExtractor
 from app.logic.ast import LogicNode
 from app.logic.compiler import compile_frame_to_ast
 from app.logic.frames import ParseFrame
+from app.numeric import NumericLayerResult, build_numeric_layer
 from app.questions import extract_candidates
-from app.tracing import CacheMetadata, DebugTrace, TraceStage
+from app.tracing import CacheMetadata, DebugTrace, NumericDerivation, ProofTraceStep, SourceCitation, TraceStage
 
 from .models import PipelineSampleResult
 
@@ -43,7 +44,7 @@ class _RequestTimeoutError(TimeoutError):
 
 
 class AsyncRuntimePipeline:
-    """Batch 6 pipeline up to solver handoff."""
+    """Batch 7 pipeline up to solver handoff."""
 
     def __init__(
         self,
@@ -192,15 +193,37 @@ class AsyncRuntimePipeline:
                 stages=stages,
             )
 
+        numeric_result, numeric_stage = self._run_numeric_layer(premise_bundle, candidate_asts)
+        stages.append(numeric_stage)
+        if numeric_stage.status == "failed" or numeric_result is None:
+            message = numeric_stage.warnings[0] if numeric_stage.warnings else "Numeric layer failed"
+            return self._build_failure_result(
+                context,
+                started_at=started_at,
+                root_cause_category="numeric_extraction_error",
+                root_cause_message=message,
+                stage_name="numeric_layer",
+                cache_mode=context.cache_mode,
+                cache_key=cache_key,
+                cache_hit=cache_hit,
+                single_flight_waited=single_flight_waited,
+                question_type=candidate_result.question_type,
+                stages=stages,
+            )
+
         solver_stage = TraceStage(
             name="solver_handoff",
             status="partial",
             duration_ms=0.0,
-            warnings=["Batch 6 stops at solver handoff; symbolic reasoning is scheduled for later batches."],
+            warnings=["Batch 7 stops at solver handoff; symbolic reasoning is scheduled for later batches."],
             metadata={
                 "premise_ast_count": len(premise_bundle.asts),
                 "candidate_ast_count": len(candidate_asts),
                 "question_type": candidate_result.question_type,
+                "numeric_fact_count": len(numeric_result.solver_context.get("numeric_facts", [])),
+                "numeric_comparison_count": len(numeric_result.comparisons),
+                "z3_constraint_count": len(numeric_result.z3_constraints),
+                "numeric_solver_context": numeric_result.solver_context,
             },
         )
         stages.append(solver_stage)
@@ -224,9 +247,12 @@ class AsyncRuntimePipeline:
                 cache_hit=cache_hit,
                 single_flight_waited=single_flight_waited,
             ),
+            proof_trace=[self._build_numeric_proof_step(numeric_result)],
             metadata={
                 "question_type": candidate_result.question_type,
                 "candidate_count": len(candidate_result.candidates),
+                "numeric_fact_count": len(numeric_result.solver_context.get("numeric_facts", [])),
+                "z3_constraint_count": len(numeric_result.z3_constraints),
             },
         )
         return PipelineSampleResult(
@@ -234,7 +260,7 @@ class AsyncRuntimePipeline:
             record_id=context.record_id,
             question_id=context.question_id,
             answer="Unknown",
-            explanation="Solver handoff reached; final symbolic decision is pending later batches.",
+            explanation="Numeric layer and solver handoff reached; final symbolic decision is pending later batches.",
             status="partial",
             question_type=candidate_result.question_type,
             cache_mode=context.cache_mode,
@@ -244,6 +270,102 @@ class AsyncRuntimePipeline:
             solver_handoff_ready=True,
             error=None,
             trace=trace,
+        )
+
+    def _run_numeric_layer(self, premise_bundle: _PremiseBundle, candidate_asts: Sequence[LogicNode]) -> tuple[NumericLayerResult | None, TraceStage]:
+        stage_start = time.perf_counter()
+        try:
+            result = build_numeric_layer(
+                premise_frames=premise_bundle.frames,
+                premise_asts=premise_bundle.asts,
+                candidate_asts=list(candidate_asts),
+            )
+        except Exception as exc:  # pragma: no cover - defensive protection around new stage
+            return None, TraceStage(
+                name="numeric_layer",
+                status="failed",
+                duration_ms=_elapsed_ms(stage_start),
+                warnings=[str(exc)],
+                metadata={},
+            )
+
+        stage_status: Literal["ok", "partial", "failed"] = "ok"
+        if result.z3_constraints or result.conflicts or result.warnings:
+            stage_status = "partial"
+        return result, TraceStage(
+            name="numeric_layer",
+            status=stage_status,
+            duration_ms=_elapsed_ms(stage_start),
+            warnings=list(result.warnings),
+            metadata={
+                "frame_quantity_count": len(result.frame_quantities),
+                "ast_quantity_count": len(result.ast_quantities),
+                "supplemental_quantity_count": len(result.supplemental_quantities),
+                "comparison_count": len(result.comparisons),
+                "derived_fact_count": len(result.derived_facts),
+                "z3_constraint_count": len(result.z3_constraints),
+                "conflict_count": len(result.conflicts),
+            },
+        )
+
+    def _build_numeric_proof_step(self, numeric_result: NumericLayerResult) -> ProofTraceStep:
+        numeric_derivations: list[NumericDerivation] = []
+        citations: list[SourceCitation] = []
+        seen_citations: set[tuple[str, int | None, str | None]] = set()
+
+        for fact in numeric_result.derived_facts:
+            sources: list[SourceCitation] = []
+            for source in fact.sources:
+                citation = SourceCitation(
+                    source_id=source.source_id,
+                    source_text=source.source_text,
+                    premise_id=source.premise_id,
+                    candidate_label=source.candidate_label,
+                )
+                key = (citation.source_id, citation.premise_id, citation.candidate_label)
+                if key not in seen_citations:
+                    seen_citations.add(key)
+                    citations.append(citation)
+                sources.append(citation)
+            rendered_value: float | int | str = fact.value
+            if isinstance(fact.value, bool):
+                rendered_value = str(fact.value).lower()
+            numeric_derivations.append(
+                NumericDerivation(
+                    name=fact.name,
+                    value=rendered_value,
+                    unit=fact.unit,
+                    expression=fact.expression,
+                    sources=sources,
+                )
+            )
+
+        proof_status: Literal["ok", "failed", "partial"] = "ok"
+        if numeric_result.z3_constraints or numeric_result.conflicts or numeric_result.warnings:
+            proof_status = "partial"
+
+        return ProofTraceStep(
+            step_id="numeric_layer",
+            action="extract_evaluate_numeric_facts",
+            solver_route="numeric",
+            status=proof_status,
+            used_premise_ids=sorted(
+                {
+                    source.premise_id
+                    for fact in numeric_result.derived_facts
+                    for source in fact.sources
+                    if source.premise_id is not None
+                }
+            ),
+            derived_facts=[fact.expression for fact in numeric_result.derived_facts],
+            numeric_derivations=numeric_derivations,
+            citations=citations,
+            warnings=list(numeric_result.warnings),
+            metadata={
+                "comparison_count": len(numeric_result.comparisons),
+                "z3_constraint_count": len(numeric_result.z3_constraints),
+                "conflict_count": len(numeric_result.conflicts),
+            },
         )
 
     def _extract_candidates(self, question: str):
@@ -409,4 +531,3 @@ def _utc_now_iso() -> str:
 
 def _cache_key_digest(cache_key: str) -> str:
     return hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
-

@@ -617,11 +617,11 @@ Some records require numerical reasoning. The system must detect numeric reasoni
 
 ### Completion Checklist
 
-- [ ] Numeric extraction exists.
-- [ ] Deterministic arithmetic works for required cases.
-- [ ] Provenance is preserved.
-- [ ] Anti-hardcode numeric tests pass.
-- [ ] `report.md` contains Batch 7 result.
+- [x] Numeric extraction exists.
+- [x] Deterministic arithmetic works for required cases.
+- [x] Provenance is preserved.
+- [x] Anti-hardcode numeric tests pass.
+- [x] `report.md` contains Batch 7 result.
 
 ## Mandatory Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
 
@@ -1145,7 +1145,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 4 - Debug Trace and Proof Trace Infrastructure
 - [x] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
 - [x] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
-- [ ] Batch 7 - Numeric Layer with Source Provenance
+- [x] Batch 7 - Numeric Layer with Source Provenance
 - [ ] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
 - [ ] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 - [ ] Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
@@ -1161,7 +1161,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M4 - Observability Foundation
 - [x] M5 - LLM Semantic Parser
 - [x] M6 - Async Runtime Skeleton
-- [ ] M7 - Numeric Reasoning Layer
+- [x] M7 - Numeric Reasoning Layer
 - [ ] M8 - Core Symbolic Reasoning
 - [ ] M9 - Extended Verification
 - [ ] M10 - Public Output Layer
@@ -1233,17 +1233,17 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B6-T9
 - [x] B6-T10
 - [x] B6-T11
-- [ ] B7-T1
-- [ ] B7-T2
-- [ ] B7-T3
-- [ ] B7-T4
-- [ ] B7-T5
-- [ ] B7-T6
-- [ ] B7-T7
-- [ ] B7-T8
-- [ ] B7-T9
-- [ ] B7-T10
-- [ ] B7-T11
+- [x] B7-T1
+- [x] B7-T2
+- [x] B7-T3
+- [x] B7-T4
+- [x] B7-T5
+- [x] B7-T6
+- [x] B7-T7
+- [x] B7-T8
+- [x] B7-T9
+- [x] B7-T10
+- [x] B7-T11
 - [ ] B8-T1
 - [ ] B8-T2
 - [ ] B8-T3

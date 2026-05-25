@@ -743,3 +743,91 @@
 ### Notes for Next Batch
 - Batch 8.5 can proceed and refactor the Batch 7 numeric layer with confidence that symbolic solver handoff/decision contracts are now implemented and test-covered.
 - Next batch should preserve the new solver + decision interfaces while modularizing numeric internals only.
+
+## Batch 8.5 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B8.5-T1: Complete.
+- B8.5-T2: Complete.
+- B8.5-T3: Complete.
+- B8.5-T4: Complete.
+- B8.5-T5: Complete.
+- B8.5-T6: Complete.
+- B8.5-T7: Complete.
+- B8.5-T8: Complete.
+- B8.5-T9: Complete.
+- B8.5-T10: Complete.
+
+### Files Created or Modified
+- app/numeric/layer.py
+- app/numeric/extractors.py
+- app/numeric/resolution.py
+- app/numeric/evaluator.py
+- app/numeric/routing.py
+- tests/test_numeric_layer.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/numeric/extractors.py (476 lines): contains frame extraction, AST extraction, source-text supplemental extraction, and provenance/span helpers in one focused extraction module.
+- app/numeric/evaluator.py (306 lines): contains deterministic arithmetic/comparison evaluation, expression rendering, quantity lookup, and evaluation-to-routing handoff in one focused evaluator module.
+- tests/test_numeric_layer.py (318 lines): keeps concentrated numeric regression scenarios and now also asserts public API/output-shape stability.
+- task.md (1750 lines): updated only to mark Batch 8.5 checklist, batch/milestone status, and task IDs complete.
+- report.md (745 lines before this append): shared append-only execution report file.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_numeric_layer.py` - Passed.
+- `python -m unittest tests/test_async_pipeline.py` - Passed.
+- `python -m unittest` - Passed.
+
+### Acceptance Criteria Check
+- `app/numeric/layer.py` reduced to thin orchestration under 200 lines: Satisfied (118 lines).
+- Numeric layer output shape remains compatible with Batch 8 and Batch 9 consumers: Satisfied (`build_numeric_layer` and `NumericLayerResult` unchanged for callers).
+- Existing numeric tests pass without weakening assertions: Satisfied.
+- Source-text supplemental extraction remains supplemental and avoids duplicating authoritative AST/frame comparisons: Satisfied (existing duplicate-suppression regression still passes).
+- No record ID, question ID, answer-label, gold answer, `premises-FOL`, or explanation shortcut introduced: Satisfied.
+- Touched files over 200 lines reported: Satisfied.
+
+### Artifacts Produced
+- New focused numeric modules:
+  - `app/numeric/extractors.py`
+  - `app/numeric/resolution.py`
+  - `app/numeric/evaluator.py`
+  - `app/numeric/routing.py`
+- Slim orchestration module:
+  - `app/numeric/layer.py`
+- Updated numeric regression coverage in:
+  - `tests/test_numeric_layer.py`
+
+### Checklist Update
+- Marked Batch 8.5 completion checklist items complete in `task.md`.
+- Marked `Batch 8.5 - Numeric Layer Modularization and Maintainability` complete in the Progress Tracker.
+- Marked `M8.5 - Numeric Layer Maintainability` complete in the Progress Tracker.
+- Marked task IDs `B8.5-T1` through `B8.5-T10` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Inventory from the previous `app/numeric/layer.py` was preserved and split by responsibility:
+  - extraction and provenance -> `extractors.py`
+  - precedence/conflicts/supplemental comparison selection -> `resolution.py`
+  - deterministic arithmetic/comparison evaluation -> `evaluator.py`
+  - Z3 candidate construction -> `routing.py`
+  - orchestration/result assembly -> `layer.py`
+- Preserved the public numeric API (`from app.numeric import build_numeric_layer, NumericLayerResult`) and existing solver-context keys.
+- Preserved warning text and conflict behavior to avoid behavior drift.
+
+### Risks or Open Issues
+- Inaccessible temporary directories in repository root (`tmpexub70qe`, `tmprpdk9dj7`) remain unchanged and outside Batch 8.5 scope.
+
+### Minor Issues Fixed During Execution
+- Added an explicit regression assertion that `build_numeric_layer` still returns `NumericLayerResult` and preserves expected `solver_context` keys.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 8.5 refactor scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 8.6 can proceed on the same numeric API and runtime contract while hardening parser prompts.
+- Numeric extraction/resolution/evaluation/routing boundaries are now explicit, so Batch 9+ can extend solver routing without re-expanding orchestration code.

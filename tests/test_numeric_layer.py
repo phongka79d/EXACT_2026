@@ -2,7 +2,7 @@ import unittest
 
 from app.logic.compiler import compile_frame_to_ast
 from app.logic.frames import parse_frame
-from app.numeric import build_numeric_layer
+from app.numeric import NumericLayerResult, build_numeric_layer
 
 
 def _compile_premise_frame(payload: dict) -> tuple[object, object]:
@@ -33,8 +33,13 @@ class NumericLayerTests(unittest.TestCase):
         self.assertEqual(result.ast_quantities[0].value, 7.2)
         self.assertEqual(result.ast_quantities[0].provenance.source_id, "premise_0001")
         self.assertEqual(result.ast_quantities[0].provenance.premise_id, 1)
+        self.assertIsInstance(result, NumericLayerResult)
         self.assertIn("numeric_facts", result.solver_context)
         self.assertGreaterEqual(len(result.solver_context["numeric_facts"]), 1)
+        self.assertSetEqual(
+            set(result.solver_context.keys()),
+            {"numeric_facts", "comparisons", "derived_facts", "z3_constraints", "conflicts", "warnings"},
+        )
 
     def test_evaluates_percentage_average_weighted_and_time_arithmetic(self):
         frames = []

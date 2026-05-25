@@ -1,4 +1,4 @@
-"""Async pipeline orchestration and artifact writing for Batch 6."""
+"""Async runtime orchestration and artifact writing."""
 
 from .artifacts import write_pipeline_artifacts
 from .models import PipelineArtifacts, PipelineSampleResult
@@ -10,4 +10,3 @@ __all__ = [
     "PipelineSampleResult",
     "write_pipeline_artifacts",
 ]
-

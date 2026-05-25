@@ -644,6 +644,12 @@ Root-cause categories should include:
 - `timeout_error`
 - `api_error`
 
+## 12.5 Maintainability Checkpoints
+
+Some batches may add focused maintainability checkpoints after a contract is proven by tests. These checkpoints must preserve runtime behavior and public APIs while reducing file size, improving module boundaries, and strengthening regression coverage.
+
+Batch 8.5 is the numeric-layer maintainability checkpoint. It must split the large Batch 7 numeric layer into focused modules only after Batch 8 has proven the solver handoff and answer-decision contract. It must not add new solver capabilities, change answer behavior, call the LLM, use reference-only fields, or introduce dataset-specific logic.
+
 ## 13. Training Use of FOL Annotations
 
 `premises-FOL` can be used offline to:
@@ -671,9 +677,10 @@ It must not be used as runtime input during evaluation or submission.
 11. Add structured debug trace collection.
 12. Add numeric extraction and deterministic numeric evaluator.
 13. Implement Horn prover, safe contraposition, and bounded quantifier support.
-14. Add Z3 support for numeric constraints and grounded non-Horn/nested formulas.
-15. Add semantic fallback for low-confidence or unsupported cases.
-16. Add MCQ, Yes/No/Unknown, and best-effort open-ended answer logic.
-17. Generate proof-trace-based explanations.
-18. Add API endpoint and `.env` runtime config.
-19. Add evaluation scripts for accuracy, explanation grounding, cache stats, and root-cause categories.
+14. Refactor the numeric layer into maintainable focused modules without changing behavior.
+15. Add Z3 support for numeric constraints and grounded non-Horn/nested formulas.
+16. Add semantic fallback for low-confidence or unsupported cases.
+17. Add MCQ, Yes/No/Unknown, and best-effort open-ended answer logic.
+18. Generate proof-trace-based explanations.
+19. Add API endpoint and `.env` runtime config.
+20. Add evaluation scripts for accuracy, explanation grounding, cache stats, and root-cause categories.

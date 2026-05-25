@@ -1,4 +1,4 @@
-"""Artifact writers for Batch 6 pipeline outputs."""
+"""Artifact writers for runtime pipeline outputs."""
 
 from __future__ import annotations
 
@@ -29,4 +29,3 @@ def write_pipeline_artifacts(output_dir: str | Path, results: Sequence[PipelineS
         predictions_path=str(predictions_path),
         debug_traces_path=str(debug_traces_path),
     )
-

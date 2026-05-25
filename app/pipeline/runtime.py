@@ -46,7 +46,7 @@ class _RequestTimeoutError(TimeoutError):
 
 
 class AsyncRuntimePipeline:
-    """Batch 7 pipeline up to solver handoff."""
+    """Async runtime pipeline from parse-frame extraction through symbolic answer decision."""
 
     def __init__(
         self,
@@ -657,7 +657,7 @@ class AsyncRuntimePipeline:
             record_id=context.record_id,
             question_id=context.question_id,
             answer="Unknown",
-            explanation="Pipeline failed before solver handoff.",
+            explanation="Pipeline failed before a final answer could be produced.",
             status="failed",
             question_type=question_type,
             cache_mode=cache_mode,

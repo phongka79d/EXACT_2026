@@ -82,8 +82,14 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
   - Batch 8 complete. Horn, safe contraposition, bounded quantifiers, and answer decision work.
 - M8.5 - Numeric Layer Maintainability
   - Batch 8.5 complete. The Batch 7 numeric layer is split into focused modules without changing runtime behavior.
+- M8.6 - LLM Parser Prompt Hardening
+  - Batch 8.6 complete. Premise and candidate parse-frame prompts are stronger, schema-grounded, and tested with live/runtime-safe parser smoke.
 - M9 - Extended Verification
   - Batch 9 complete. Z3 routing and confidence-capped fallback cover supported harder fragments.
+- M9.5 - Solver Citation Enrichment
+  - Batch 9.5 complete. Solver proof steps preserve source text and citation metadata needed by public explanations.
+- M9.6 - Proof Trace Explanation Readiness
+  - Batch 9.6 complete. Proof traces are explanation-ready before public output formatting and adapters.
 - M10 - Public Output Layer
   - Batch 10 complete. Proof-trace explanations, open-ended fallback, and MCQ submission adapter work.
 - M11 - Submission API
@@ -103,11 +109,14 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
 6. Batch 6 -> Batch 7
 7. Batch 7 -> Batch 8
 8. Batch 8 -> Batch 8.5
-9. Batch 8.5 -> Batch 9
-10. Batch 9 -> Batch 10
-11. Batch 10 -> Batch 11
-12. Batch 11 -> Batch 12
-13. Batch 12 -> Batch 13
+9. Batch 8.5 -> Batch 8.6
+10. Batch 8.6 -> Batch 9
+11. Batch 9 -> Batch 9.5
+12. Batch 9.5 -> Batch 9.6
+13. Batch 9.6 -> Batch 10
+14. Batch 10 -> Batch 11
+15. Batch 11 -> Batch 12
+16. Batch 12 -> Batch 13
 
 ## Mandatory Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
 
@@ -793,6 +802,84 @@ Batch 7 intentionally kept numeric extraction, merge logic, deterministic evalua
 - [ ] Numeric behavior regression tests pass.
 - [ ] `report.md` contains Batch 8.5 result and file-size notes.
 
+## Mandatory Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
+
+### Goal
+
+Strengthen the premise and candidate parse-frame prompts so the configured LLM can act as the primary semantic parser for nested, numeric, rule, fact, claim, and ambiguous educational logic text without hardcoding dataset examples.
+
+### Why this batch exists
+
+The parser prompt is currently the most fragile root-cause point in the pipeline. Downstream symbolic reasoning can only work if the LLM emits faithful compact parse frames. This batch improves parser instructions and parser validation before broader Z3/fallback work and before larger dataset smoke runs.
+
+### Inputs / Dependencies
+
+- Batches 1-8.5 outputs.
+- Existing `app/llm/prompts.py`, frame extractor, frame schema, compiler, and validation tests.
+- `flow.md` parse-frame, numeric-frame, and runtime LLM rules.
+- `PLAN.md` LLM parse-frame extraction plan.
+- Existing `.env` model configuration, without exposing raw secrets.
+
+### Exact Task List
+
+- B8.6-T1: Audit current premise and candidate prompts against `flow.md` frame kinds, slot types, numeric requirements, nested implication preservation, ambiguity behavior, and no-answering rules.
+- B8.6-T2: Expand prompt instructions for rule/fact/claim/compound/ambiguous frames without adding record-specific examples or dataset-derived answers.
+- B8.6-T3: Add explicit numeric parser guidance for `numeric_value`, `numeric_condition`, `arithmetic_expression`, units, comparison phrases, percentages, GPA, scores, deadlines, durations, fees, and thresholds.
+- B8.6-T4: Add prompt guidance for nested or compound natural-language premises so the model preserves implication direction and emits `compound` or `ambiguous` rather than flattening unsafely.
+- B8.6-T5: Add candidate prompt guidance for MCQ options, Yes/No/Unknown claims, numeric claims, and open-ended claims while still forbidding final-answer generation.
+- B8.6-T6: Add or update tests that inspect prompt text for required schema constraints, numeric guidance, no-reference-field rules, and no final-answer instruction drift.
+- B8.6-T7: Add mocked parser tests for representative synthetic nested/numeric/rule/candidate frames that do not come from gold labels or record-specific examples.
+- B8.6-T8: Run credential-gated live parse-frame smoke using the configured `.env` model on synthetic runtime-safe inputs; report sanitized blockers honestly if unavailable.
+- B8.6-T9: Ensure prompt/cache versioning is updated when prompt content changes so stale parse-frame cache entries cannot mix with the new parser contract.
+- B8.6-T10: Append Batch 8.6 execution details to `report.md`, including live smoke outcome and file-size notes.
+
+### Files or Modules Likely Created or Updated
+
+- `app/llm/prompts.py`
+- `app/llm/extractor.py` only if prompt/cache version wiring requires it.
+- `scripts/smoke_test_llm_parse_frame.py`
+- `tests/test_llm_frame_extraction.py`
+- Optional focused prompt tests.
+- `report.md`
+- `task.md`
+
+### Required Outputs / Artifacts
+
+- Hardened premise/candidate/repair prompts.
+- Updated prompt version if prompt text changes.
+- Prompt regression tests.
+- Live parse-frame smoke result or sanitized blocker.
+- Batch 8.6 report entry.
+
+### Acceptance Criteria
+
+- Prompts cover all approved frame kinds and slot types used by the runtime.
+- Numeric and nested premise guidance is explicit and not keyword-only or record-specific.
+- Prompts forbid final-answer generation and reference-only fields.
+- Prompt/cache version changes when prompt content changes.
+- Live parse-frame smoke passes with the configured model, or a sanitized blocker is reported.
+
+### Required Tests or Validations
+
+- `python -m unittest tests/test_llm_frame_extraction.py`
+- `python scripts/smoke_test_llm_parse_frame.py --env-path .env --timeout-seconds 20 --max-attempts 3`
+- `python -m unittest`
+
+### Explicit Non-Goals
+
+- Do not tune prompts to specific dataset records, gold FOL, gold answers, or gold explanations.
+- Do not ask the LLM to solve or choose final answers.
+- Do not change frame schema unless a clear validation gap is found and tests justify it.
+- Do not implement Z3, fallback, public explanation rendering, or API behavior.
+
+### Completion Checklist
+
+- [ ] Parser prompts are hardened for approved frame/slot/numeric/nested cases.
+- [ ] Prompt/cache versioning is updated when needed.
+- [ ] Prompt regression tests pass.
+- [ ] Live parse-frame smoke passes or a sanitized blocker is reported.
+- [ ] `report.md` contains Batch 8.6 result.
+
 ## Mandatory Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 
 ### Goal
@@ -805,7 +892,7 @@ Some dataset questions include arithmetic, grounded Boolean constraints, or nest
 
 ### Inputs / Dependencies
 
-- Batches 1-8.5 outputs.
+- Batches 1-8.6 outputs.
 - `PLAN.md` Z3 and semantic fallback sections.
 - `flow.md` symbolic verification section.
 
@@ -868,6 +955,155 @@ Some dataset questions include arithmetic, grounded Boolean constraints, or nest
 - [ ] Semantic fallback is confidence-capped.
 - [ ] `report.md` contains Batch 9 result.
 
+## Mandatory Batch 9.5 - Solver Citation Source-Text Enrichment
+
+### Goal
+
+Ensure every solver proof step carries enough source text and citation metadata for later public explanation rendering.
+
+### Why this batch exists
+
+Batch 8 solver proof steps currently preserve logical derivations and premise IDs, but public explanations need human-readable citations. Batch 9 may add Z3 and fallback routes, so citation enrichment should happen after route expansion and before explanation generation.
+
+### Inputs / Dependencies
+
+- Batches 1-9 outputs.
+- Existing proof trace schemas and solver result models.
+- Horn, quantifier, contraposition, Z3/router, and fallback outputs from earlier batches.
+- `flow.md` proof-trace and explanation requirements.
+- `PLAN.md` explanation grounding and debug trace requirements.
+
+### Exact Task List
+
+- B9.5-T1: Audit solver proof steps for missing `source_text`, premise IDs, candidate labels, and route-specific citation metadata.
+- B9.5-T2: Add a deterministic source registry or citation resolver that maps premise/candidate AST metadata into proof-trace citations.
+- B9.5-T3: Enrich Horn and contraposition derivations with original source text whenever available.
+- B9.5-T4: Enrich numeric, Z3, unsupported-route, and semantic-fallback proof steps with source text or explicit missing-source warnings.
+- B9.5-T5: Preserve secret/reference-field guards so citations cannot include `premises-FOL`, gold answers, explanations, or `idx`.
+- B9.5-T6: Add tests proving solver proof steps include source text for premise-derived facts and safe candidate references for candidate-derived claims.
+- B9.5-T7: Add tests proving missing citation data produces traceable warnings rather than silent empty citations.
+- B9.5-T8: Append Batch 9.5 execution details to `report.md`, including file-size notes.
+
+### Files or Modules Likely Created or Updated
+
+- `app/tracing/`
+- `app/solver/`
+- `app/pipeline/runtime.py`
+- `tests/test_horn_solver.py`
+- `tests/test_solver_routing.py`
+- Optional focused citation/proof-trace tests.
+- `report.md`
+- `task.md`
+
+### Required Outputs / Artifacts
+
+- Citation resolver or equivalent source-text enrichment path.
+- Solver proof steps with source text when available.
+- Warnings for missing source text.
+- Regression tests for citation completeness and reference-field safety.
+- Batch 9.5 report entry.
+
+### Acceptance Criteria
+
+- Public explanation code can read source text from proof-trace citations without re-reading runtime inputs ad hoc.
+- Solver citations preserve premise ID, candidate label, route, and source text where available.
+- Missing citation source text is explicit and trace-visible.
+- No reference-only training annotations or secrets can enter citations.
+
+### Required Tests or Validations
+
+- Citation/proof-trace focused tests added in this batch.
+- Relevant solver and pipeline tests.
+- `python -m unittest`
+
+### Explicit Non-Goals
+
+- Do not generate final public explanations yet.
+- Do not change entailment truth values or answer decisions.
+- Do not use gold explanations as citation text.
+- Do not implement API endpoint behavior.
+
+### Completion Checklist
+
+- [ ] Solver proof citations include source text where available.
+- [ ] Missing source text warnings are trace-visible.
+- [ ] Citation safety tests pass.
+- [ ] Entailment and answer behavior remain unchanged.
+- [ ] `report.md` contains Batch 9.5 result.
+
+## Mandatory Batch 9.6 - Proof Trace Explanation Readiness
+
+### Goal
+
+Make proof traces sufficiently complete, ordered, and stable for high-quality public explanation rendering in Batch 10.
+
+### Why this batch exists
+
+Explanation quality is a scoring dimension. Before building the public output layer, the proof trace should expose a clean reasoning chain, route labels, numeric computations, confidence signals, unsupported gaps, and citations in a renderer-friendly contract.
+
+### Inputs / Dependencies
+
+- Batches 1-9.5 outputs.
+- Enriched solver citations from Batch 9.5.
+- Numeric derivations, Horn derivations, Z3/fallback route metadata, and answer-decision traces.
+- `flow.md` proof trace, answer decision, and explanation-generation sections.
+- `PLAN.md` proof-trace explanation requirements.
+
+### Exact Task List
+
+- B9.6-T1: Define an explanation-ready proof-trace contract or helper view that orders premise facts, derived facts, numeric computations, solver route steps, and final decision.
+- B9.6-T2: Ensure proof-trace steps have stable IDs, route labels, statuses, used premise IDs, derived fact strings, citations, warnings, and optional confidence metadata.
+- B9.6-T3: Add route-specific trace details for Horn, contraposition, quantifier instantiation, Z3, fallback, and capability gaps.
+- B9.6-T4: Add numeric explanation fields for computed values, units, expressions, and source citations.
+- B9.6-T5: Add answer-decision trace details showing claim result, negated-claim result, MCQ candidate outcomes, and why `Unknown` was selected when applicable.
+- B9.6-T6: Add tests that convert representative traces into explanation-ready structures without missing required fields.
+- B9.6-T7: Add tests that proof traces remain runtime-safe and do not contain reference-only fields.
+- B9.6-T8: Append Batch 9.6 execution details to `report.md`, including file-size notes.
+
+### Files or Modules Likely Created or Updated
+
+- `app/tracing/`
+- `app/pipeline/runtime.py`
+- `app/output/` only for proof-trace view models/helpers, not final public formatting.
+- `tests/test_debug_trace.py`
+- Optional proof-trace readiness tests.
+- `report.md`
+- `task.md`
+
+### Required Outputs / Artifacts
+
+- Explanation-ready proof-trace contract/helper.
+- Tests for ordering, required fields, route metadata, numeric derivations, decision details, and runtime safety.
+- Batch 9.6 report entry.
+
+### Acceptance Criteria
+
+- Batch 10 can render public explanations from proof traces without inventing reasoning.
+- Proof traces include enough structured evidence for numeric, symbolic, fallback, and `Unknown` cases.
+- Trace ordering is deterministic.
+- Reference-only and secret-safety guards still pass.
+
+### Required Tests or Validations
+
+- Proof-trace readiness tests added in this batch.
+- `python -m unittest tests/test_debug_trace.py`
+- `python -m unittest`
+
+### Explicit Non-Goals
+
+- Do not produce final public response formatting.
+- Do not add MCQ forced-choice submission policy.
+- Do not call an LLM to verbalize explanations.
+- Do not change solver truth values.
+
+### Completion Checklist
+
+- [ ] Explanation-ready proof-trace contract exists.
+- [ ] Route, numeric, citation, and decision details are represented.
+- [ ] Trace ordering is deterministic.
+- [ ] Runtime safety tests pass.
+- [ ] `report.md` contains Batch 9.6 result.
+
 ## Mandatory Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 
 ### Goal
@@ -880,7 +1116,7 @@ The competition requires `answer` and `explanation`. These outputs must be groun
 
 ### Inputs / Dependencies
 
-- Batches 1-9 outputs.
+- Batches 1-9.6 outputs.
 - `PLAN.md` output and MCQ policy sections.
 - `flow.md` sections 10 and 11.
 
@@ -1098,7 +1334,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 ### Inputs / Dependencies
 
-- Batches 1-12 outputs.
+- Batches 1-12 outputs, including mandatory fractional batches 8.5, 8.6, 9.5, and 9.6.
 - `PLAN.md` final acceptance criteria.
 - `flow.md` full runtime flow.
 - `docs/competition.md`.
@@ -1169,7 +1405,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 ### Hard Limits
 
-- This track is outside the mandatory Batch 1-13 chain.
+- This track is outside the mandatory batch dependency chain.
 - Do not weaken Type 1 runtime boundaries.
 - Do not merge new dataset assumptions into the core solver without source evidence.
 
@@ -1189,8 +1425,11 @@ After all components exist, the project needs end-to-end confidence that the imp
 - Batch 6 -> Batch 7: pipeline before numeric layer integration.
 - Batch 7 -> Batch 8: numeric facts before core symbolic answer decision.
 - Batch 8 -> Batch 8.5: core symbolic solver before numeric layer refactor, so the refactor preserves a proven solver handoff contract.
-- Batch 8.5 -> Batch 9: maintainable numeric modules before Z3/fallback extensions build on numeric constraint candidates.
-- Batch 9 -> Batch 10: solver results before public explanations and adapters.
+- Batch 8.5 -> Batch 8.6: maintainable numeric modules before prompt hardening and larger downstream smoke work.
+- Batch 8.6 -> Batch 9: hardened parser prompts before Z3/fallback extensions rely on parsed numeric and logic structure.
+- Batch 9 -> Batch 9.5: complete solver routes before enriching route-specific source-text citations.
+- Batch 9.5 -> Batch 9.6: source-text citations before building explanation-ready proof-trace views.
+- Batch 9.6 -> Batch 10: explanation-ready proof traces before public explanations and adapters.
 - Batch 10 -> Batch 11: output formatter before API endpoint.
 - Batch 11 -> Batch 12: API/runtime path before local evaluation and scoring.
 - Batch 12 -> Batch 13: evaluation loop before final hardening.
@@ -1205,11 +1444,14 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] Both cache modes use single-flight locks.
 - [ ] Async evaluation supports bounded concurrency, retries, backoff, timeout handling, failed-sample continuation, and deterministic output ordering.
 - [ ] Parse-frame schema and AST schema support required logical/numeric constructs, metadata, variables/constants, deterministic compilation, and strict validation.
+- [ ] LLM parser prompts are schema-grounded, numeric-aware, nested-premise-aware, and tested without reference-field leakage.
 - [ ] Numeric layer tracks source provenance and inserts derived facts into proof trace.
 - [ ] Horn prover supports tested safe contraposition.
 - [ ] Quantifier handling supports schema-level universal matching, bounded instantiation, and unsupported-case reporting.
 - [ ] Nested implications are routed to grounded Z3 encoding or explicit `solver_capability_gap`.
 - [ ] Semantic fallback exists, is confidence-capped, and does not override symbolic proofs.
+- [ ] Solver proof citations preserve source text where available and report missing citation data explicitly.
+- [ ] Proof traces are explanation-ready before public output formatting.
 - [ ] MCQ local `Unknown` and official submission adapter behavior are tested separately.
 - [ ] Best-effort open-ended answers are proof-grounded or return `Unknown`.
 - [ ] Explanations are generated from proof traces only.
@@ -1236,7 +1478,10 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 7 - Numeric Layer with Source Provenance
 - [x] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
 - [ ] Batch 8.5 - Numeric Layer Modularization and Maintainability
+- [ ] Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
 - [ ] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
+- [ ] Batch 9.5 - Solver Citation Source-Text Enrichment
+- [ ] Batch 9.6 - Proof Trace Explanation Readiness
 - [ ] Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 - [ ] Batch 11 - API Endpoint
 - [ ] Batch 12 - Evaluation, Scoring, and Error Analysis
@@ -1253,7 +1498,10 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M7 - Numeric Reasoning Layer
 - [x] M8 - Core Symbolic Reasoning
 - [ ] M8.5 - Numeric Layer Maintainability
+- [ ] M8.6 - LLM Parser Prompt Hardening
 - [ ] M9 - Extended Verification
+- [ ] M9.5 - Solver Citation Enrichment
+- [ ] M9.6 - Proof Trace Explanation Readiness
 - [ ] M10 - Public Output Layer
 - [ ] M11 - Submission API
 - [ ] M12 - Evaluation Loop
@@ -1357,6 +1605,16 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] B8.5-T8
 - [ ] B8.5-T9
 - [ ] B8.5-T10
+- [ ] B8.6-T1
+- [ ] B8.6-T2
+- [ ] B8.6-T3
+- [ ] B8.6-T4
+- [ ] B8.6-T5
+- [ ] B8.6-T6
+- [ ] B8.6-T7
+- [ ] B8.6-T8
+- [ ] B8.6-T9
+- [ ] B8.6-T10
 - [ ] B9-T1
 - [ ] B9-T2
 - [ ] B9-T3
@@ -1368,6 +1626,22 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] B9-T9
 - [ ] B9-T10
 - [ ] B9-T11
+- [ ] B9.5-T1
+- [ ] B9.5-T2
+- [ ] B9.5-T3
+- [ ] B9.5-T4
+- [ ] B9.5-T5
+- [ ] B9.5-T6
+- [ ] B9.5-T7
+- [ ] B9.5-T8
+- [ ] B9.6-T1
+- [ ] B9.6-T2
+- [ ] B9.6-T3
+- [ ] B9.6-T4
+- [ ] B9.6-T5
+- [ ] B9.6-T6
+- [ ] B9.6-T7
+- [ ] B9.6-T8
 - [ ] B10-T1
 - [ ] B10-T2
 - [ ] B10-T3

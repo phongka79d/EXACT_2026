@@ -1,4 +1,4 @@
-"""Result contracts for the Batch 6 async runtime pipeline."""
+"""Result contracts for the async runtime pipeline."""
 
 from __future__ import annotations
 
@@ -49,4 +49,3 @@ class PipelineSampleResult:
 class PipelineArtifacts:
     predictions_path: str
     debug_traces_path: str
-

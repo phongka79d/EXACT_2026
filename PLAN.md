@@ -1220,6 +1220,43 @@ Risks:
 
 - Unsound contraposition if explicit negation is confused with missing evidence.
 
+### Batch 8.5: Numeric Layer Modularization and Maintainability
+
+Goal: Split the large Batch 7 numeric layer into focused modules after the Batch 8 solver contract is proven, while preserving exact runtime behavior.
+
+Expected files/modules:
+
+- `app/numeric/layer.py`
+- `app/numeric/extractors.py`
+- `app/numeric/resolution.py`
+- `app/numeric/evaluator.py`
+- `app/numeric/routing.py`
+- `tests/test_numeric_layer.py`
+
+Tasks:
+
+- Keep `from app.numeric import build_numeric_layer` and `NumericLayerResult` stable.
+- Move extraction, resolution/conflict handling, deterministic evaluation, and Z3-candidate routing into focused modules.
+- Leave `app/numeric/layer.py` as thin orchestration.
+- Preserve provenance, warnings, conflicts, derived facts, solver-context keys, and duplicate source-text suppression.
+- Add or preserve regression tests proving no behavior drift.
+
+Validation commands:
+
+- `python -m unittest tests/test_numeric_layer.py`
+- `python -m unittest tests/test_async_pipeline.py`
+- `python -m unittest`
+
+Completion criteria:
+
+- Numeric module boundaries are clearer and `app/numeric/layer.py` is reduced to orchestration.
+- Public numeric API and downstream solver handoff remain compatible.
+- No new solver behavior, LLM calls, or dataset-specific logic is introduced.
+
+Risks:
+
+- Refactor drift can silently change numeric proof traces; regression tests must compare externally visible behavior.
+
 ### Batch 9: Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 
 Goal: Extend coverage to numeric/non-Horn fragments and provide a low-confidence fallback.

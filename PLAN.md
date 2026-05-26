@@ -219,7 +219,7 @@ Common slot types:
 - `numeric_condition`: `{type: "numeric_condition", entity, attribute, op, value?, unit?, expression?}`
 - `numeric_value`: `{type: "numeric_value", entity, attribute, value, unit?}`
 - `arithmetic_expression`: `{type: "arithmetic_expression", op, operands}`
-- `entity_relation`: `{type: "entity_relation", subject, relation, object, polarity?}`
+- `entity_relation`: `{type: "entity_relation", subject, relation, object, complement?, polarity?}`
 
 Example rule frame:
 
@@ -301,6 +301,18 @@ Frame-to-AST compiler responsibilities:
 - Add source metadata to AST roots.
 - Preserve implication direction and explicit polarity.
 - Record compiler warnings when a frame slot cannot be safely compiled.
+- Perform structural lowering only; do not read source text to semantically repair, reinterpret, or guess missing meaning.
+
+Parser contract hardening controls (mandatory):
+
+- Persist parser lifecycle artifacts for debugging and replay in sequenced mode:
+  - pre-extractor / mock-only phases (for example Batch 3): `normalized_frame`, `validated_frame`, `compiled_ast`, `rejected`;
+  - extractor-enabled phases (Batch 5 onward): add mandatory `raw_response` for every LLM parse attempt.
+- If live credentials/provider are blocked, record blocker artifact/gate status and do not claim parser gate pass.
+- Reject relation-role loss: `subject`/`object`/`complement` information must not collapse into lossy single predicates.
+- Reject clause-side corruption: antecedent and consequent must remain on correct `if`/`then` side.
+- Emit `ambiguous` when meaning is uncertain, and block ambiguous frames from compiling as fact/rule/claim.
+- Keep canonicalization lexical-only; prohibit dataset/domain semantic token-map aliasing.
 
 ### Typed Logic AST Schema
 
@@ -491,6 +503,7 @@ Required fields: `type`, `name`, `args`.
 - Preserve explicit classical negation.
 - Preserve all source metadata needed for proof trace citations.
 - Maintain a per-premise-bundle predicate phrase map.
+- Do not introduce semantic merge rules, over-aliasing, or static dataset/domain lexicon maps.
 
 ## 6. LLM Parse-Frame Extraction Plan
 
@@ -504,6 +517,8 @@ Converter strategy:
 - Premise frame extraction and candidate frame extraction use separate prompts.
 - Prompts include generic frame examples, allowed frame kinds/slot types, metadata requirements, and instructions to return uncertainty instead of inventing entities.
 - Runtime prompts must never include `premises-FOL`, `answer`, `explanation`, or `idx`.
+- Prompts must enforce JSON-only output, role/complement preservation, clause-side integrity (`if` vs `then`), and source-span anchoring.
+- On unresolved uncertainty, prompts must require `ambiguous` output rather than semantic guessing.
 
 Early live validation:
 
@@ -513,6 +528,7 @@ Early live validation:
 - The early smoke test validates authentication, model availability, timeout behavior, and basic response shape only; it does not validate parse-frame quality.
 - If `.env` is missing required values or the provider/network is unavailable, report the smoke as blocked with sanitized details.
 - Once the LLM parse-frame extractor exists, run a second live smoke test that requests strict compact parse-frame JSON and validates the returned frame schema.
+- Live parser smoke/quality gate is a blocker for claiming parser readiness; blocked credentials/network must be recorded explicitly and must not be treated as pass.
 
 Numeric frame extraction requirements:
 
@@ -777,6 +793,10 @@ Root-cause categories:
 - `timeout_error`
 - `api_error`
 
+Attribution rule:
+
+- Preserve earliest pipeline failure stage. Parser/frame/schema/compiler failures must stay parser-attributed and must never be rewritten as `solver_capability_gap`.
+
 Safe logging:
 
 - Never log `.env` values, API keys, auth headers, or secret-bearing URLs.
@@ -1014,13 +1034,15 @@ Expected files/modules:
 Tasks:
 
 - Implement compact parse-frame models for `rule`, `fact`, `claim`, `compound`, and `ambiguous` frames.
-- Implement frame slot models for predicates, numeric conditions, numeric values, arithmetic expressions, and entity relations.
+- Implement frame slot models for predicates, numeric conditions, numeric values, arithmetic expressions, and entity relations with strict role fields.
 - Implement deterministic frame-to-AST compiler.
 - Implement discriminated node models for `pred`, `not`, `and`, `or`, `implies`, `forall`, `exists`, `compare`, `arith`, and `num_ref`.
 - Implement term models for variables, constants, and numbers.
-- Validate frame required slots, AST required fields, enum values, required root metadata, variable binding, predicate arity, and numeric operands.
-- Normalize predicate names and associative connectives while preserving source metadata.
-- Keep nested implications as tree structures.
+- Validate frame required slots, AST required fields, enum values, required root metadata, variable binding, predicate arity, numeric operands, role preservation, and clause-side integrity.
+- Normalize predicate names and associative connectives while preserving source metadata; canonicalization must remain lexical-only.
+- Keep nested implications as tree structures and reject antecedent/consequent swaps.
+- Enforce structural-only compiler lowering and block semantic repair from source text.
+- Ensure `ambiguous` frames never compile as fact/rule/claim AST nodes.
 
 Validation commands:
 
@@ -1033,6 +1055,8 @@ Completion criteria:
 - All required parse-frame kinds validate.
 - Rule/fact/claim frames compile to expected AST structures.
 - All node types validate.
+- Relation role/complement information is preserved and tested.
+- Clause-side integrity and ambiguous-compile blocking are tested.
 - Invalid scopes and malformed numeric expressions fail clearly.
 - Source metadata survives normalization.
 
@@ -1058,6 +1082,8 @@ Tasks:
 - Add root-cause categories including quantifier, numeric, and fallback categories.
 - Add safe redaction helpers.
 - Add JSON/JSONL artifact writers.
+- Add attribution rule enforcement so parser/schema/compiler failures cannot be overwritten as solver capability gaps.
+- Add required artifact contracts for `frame_events.jsonl`, `parser_replay_*.jsonl`, and `numeric_validation_failures.jsonl`.
 
 Validation commands:
 
@@ -1069,6 +1095,7 @@ Completion criteria:
 - Early LLM connectivity is either validated live or reported as blocked with sanitized provider/network/config details.
 - Trace serializes without secrets.
 - Root-cause categories are test-covered.
+- Earliest root-cause attribution is preserved across downstream routing/decision stages.
 
 Risks:
 
@@ -1088,10 +1115,11 @@ Tasks:
 - Define frame extractor interface.
 - Implement async ShopAIKey/OpenAI-compatible HTTP client that reads `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL` from `.env`.
 - Add strict JSON parsing and frame validation.
-- Add frame repair loop.
+- Add frame repair loop that preserves roles, complements, clause side, and emits `ambiguous` when uncertain.
 - Add frame cache by normalized text, prompt version, extractor version, and model.
 - Add mock frame extractor for tests.
 - Add a required credential-gated live parse-frame smoke test when `.env` has all required model settings.
+- Persist real parser failures as sanitized `parser_replay_*.jsonl` fixtures.
 
 Validation commands:
 
@@ -1105,6 +1133,7 @@ Completion criteria:
 - Transient failures retry with backoff.
 - Runtime frame extractor input excludes reference-only fields.
 - Live parse-frame smoke succeeds when provider access is available, or the blocker is documented with sanitized details.
+- Prompt contract enforces JSON-only output and ambiguous-on-uncertain behavior.
 
 Risks:
 
@@ -1161,6 +1190,8 @@ Tasks:
 - Evaluate deterministic arithmetic.
 - Insert derived numeric facts into solver context and proof trace.
 - Route harder constraints to Z3-compatible forms.
+- Enforce strict numeric validation gates for unit/dimension/range/div-zero/NaN/tolerance.
+- Write strict numeric failures to `numeric_validation_failures.jsonl`.
 
 Validation commands:
 
@@ -1171,6 +1202,7 @@ Completion criteria:
 - Numeric derived facts cite their source premises/candidates.
 - Percentages, averages, thresholds, and time comparisons are covered.
 - Numeric parse failures produce traceable warnings.
+- Numeric strict-validation failures are traceable and artifacted.
 
 Risks:
 
@@ -1201,6 +1233,8 @@ Tasks:
 - Add explicit safe contraposition proof rule for literal-to-literal implications.
 - Check claim and negated claim.
 - Implement Yes/No/Unknown and MCQ local answer selection.
+- Add negative semantic tests (sufficient vs necessary, eligible vs needs, awarded vs qualifies without rule chain, option over-aliasing, negation flip, contradiction stress).
+- Ensure parser/schema/compiler failures are not collapsed into solver capability gaps.
 
 Validation commands:
 
@@ -1215,6 +1249,7 @@ Completion criteria:
 - Unsafe contraposition cases are rejected.
 - Supported quantifier cases instantiate correctly.
 - Unsupported quantifier cases return `solver_capability_gap`.
+- Negative semantic regressions are covered and passing.
 
 Risks:
 
@@ -1279,6 +1314,7 @@ Tasks:
 - Mark unsupported nested/meta-logic cases as `solver_capability_gap`.
 - Invoke semantic fallback only when symbolic route cannot produce a strong result.
 - Cap fallback confidence below successful symbolic proof confidence.
+- Preserve parser-stage attribution and block fallback from masking parser/schema/compiler failures.
 
 Validation commands:
 
@@ -1291,6 +1327,7 @@ Completion criteria:
 - Z3 handles supported numeric and grounded nested implication cases.
 - Unsupported nested implication returns `solver_capability_gap`.
 - Fallback cannot override a symbolic proof.
+- Parser-stage failures remain parser-attributed and are not recategorized to solver/fallback outcomes.
 
 Risks:
 
@@ -1313,10 +1350,10 @@ Tasks:
 
 - Reproduce or inspect the recent two-record LLM smoke where every sample reached the solver but returned `Unknown`.
 - Audit LLM frames and compiled ASTs for entity mismatch, predicate mismatch, arity mismatch, generic class phrase mismatch, and subject/object loss.
-- Add bundle-local predicate/entity canonicalization derived only from the current runtime source text, validated frames, and compiled AST metadata.
+- Add bundle-local lexical normalization derived only from the current runtime source text, validated frames, and compiled AST metadata.
 - Preserve meaningful subject and object arguments for relation-like facts so downstream Horn/quantifier reasoning can chain facts and rules.
-- Align singular/plural class phrases, named instances, and compatible role/domain phrases within the same premise bundle without a global dataset map.
-- Add synthetic tests for multi-step eligibility chains, generic project/code rule chains, predicate/entity aliasing, and subject/object preservation.
+- Apply lexical-only normalization within the same premise bundle (for example casing, underscore/space style, and singular/plural morphology) without semantic synonym merging or static maps.
+- Add synthetic tests for multi-step eligibility chains, generic project/code rule chains, lexical normalization boundaries, and subject/object preservation.
 - Add anti-overfit tests proving the behavior does not depend on record IDs, sample IDs, question IDs, option labels, gold answers, gold explanations, `idx`, or `premises-FOL`.
 - Rerun the live `.env` two-record smoke with bounded concurrency and report whether remaining `Unknown` answers are parser, compiler, solver, or provider issues.
 
@@ -1330,7 +1367,7 @@ Validation commands:
 
 Completion criteria:
 
-- Synthetic chain tests prove semantically equivalent premise/candidate phrasing can entail the expected claim without dataset-specific maps.
+- Synthetic chain tests prove lexical normalization handles formatting/morphology drift without introducing semantic synonym merging or dataset/domain static maps.
 - Relation-like facts preserve enough argument structure for downstream symbolic reasoning.
 - Canonicalization is bundle-local, deterministic, trace-visible, and source-cited.
 - The two-record LLM smoke no longer fails as all-`Unknown` solely because of parser/AST subject/object loss or predicate/entity drift; if provider instability or a deeper solver gap remains, the sanitized root cause is reported.
@@ -1428,6 +1465,8 @@ Tasks:
 - Aggregate root-cause categories.
 - Report accuracy by question type, solver route, fallback use, and cache mode.
 - Verify no reference fields enter runtime pipeline.
+- Separate and report parser/schema/compiler incidents from solver capability gaps.
+- Emit incident artifacts (`parser_replay_*.jsonl`, `numeric_validation_failures.jsonl`) and E01-E14 compliance summary.
 
 Validation commands:
 
@@ -1438,6 +1477,7 @@ Completion criteria:
 
 - Evaluation reads references only in scorer/analyzer.
 - Error summary is grouped and actionable.
+- Parser/solver attribution boundaries are preserved in error reporting.
 
 Risks:
 
@@ -1460,6 +1500,8 @@ Tasks:
 - Add local/API cache hit-count regression tests.
 - Document the configured `.env` model choice, currently `SHOPAIKEY_MODEL=qwen2.5-7b-instruct`, and any external data usage.
 - Run full test suite and local evaluation smoke test.
+- Add final E01-E14 regression checks and artifact-presence checks (`frame_events.jsonl`, `parser_replay_*.jsonl`, `numeric_validation_failures.jsonl`).
+- Verify live parser gate is passed or explicitly blocked with sanitized evidence.
 
 Validation commands:
 
@@ -1472,6 +1514,7 @@ Completion criteria:
 - All tests pass.
 - Submission response shape is valid.
 - Competition constraints are documented.
+- E01-E14 controls are test-covered and artifact-backed.
 
 Risks:
 
@@ -1481,7 +1524,7 @@ Risks:
 
 - Premise cache key mismatch: use `record_id` only for local evaluation and normalized premise hash for API runtime; test both modes.
 - LLM frame parse errors: strict frame schema, repair prompts, deterministic frame-to-AST compiler, confidence penalties, fallback trace.
-- Predicate/entity mismatch: per-premise-bundle predicate map, arity checks, phrase alias tracking, subject/object preservation, and negative tests against over-broad aliasing.
+- Predicate/entity mismatch: per-premise-bundle lexical phrase map, arity checks, subject/object preservation, and negative tests against over-broad aliasing.
 - Unsafe contraposition: implement only literal-to-literal explicit-negation cases inside the Horn prover; test unsupported cases.
 - Nested implication gaps: encode only fully grounded finite formulas in Z3; otherwise return `solver_capability_gap`.
 - Quantifier complexity: use bounded instantiation over discovered constants; reject unbounded or alternating quantifier patterns.
@@ -1504,7 +1547,13 @@ Risks:
 - [ ] Async evaluation supports bounded concurrency, retries, backoff, timeout handling, failed-sample continuation, and deterministic output ordering.
 - [ ] Parse-frame schema and AST schema support required logical/numeric constructs, metadata, variables/constants, deterministic compilation, and strict validation.
 - [ ] Bundle-local predicate/entity canonicalization preserves relation arguments and reduces avoidable `Unknown` outputs without record-specific maps.
+- [ ] Parser lifecycle artifacts exist and are reviewable: raw response, normalized frame, validated frame, compiled AST (`frame_events.jsonl`).
+- [ ] Sanitized parser replay fixtures from real failures exist (`parser_replay_*.jsonl`).
+- [ ] Ambiguous frames are emitted when uncertain and are blocked from fact/rule/claim compilation.
+- [ ] Compiler performs structural lowering only and does not apply source-text semantic repair.
+- [ ] Canonicalization remains lexical-only and does not use static dataset/domain token maps.
 - [ ] Numeric layer tracks source provenance and inserts derived facts into proof trace.
+- [ ] Numeric strict-validation gates are enforced and artifacted (`numeric_validation_failures.jsonl`) for unit/dimension/range/div-zero/NaN/tolerance failures.
 - [ ] Horn prover supports tested safe contraposition.
 - [ ] Quantifier handling supports schema-level universal matching, bounded instantiation, and reports unsupported cases.
 - [ ] Nested implications are routed to grounded Z3 encoding or explicit `solver_capability_gap`.
@@ -1513,8 +1562,10 @@ Risks:
 - [ ] Best-effort open-ended first-milestone answers are proof-grounded or return `Unknown`, and are reported separately from core metrics.
 - [ ] Explanations are generated from proof traces only.
 - [ ] Debug traces identify root causes without leaking secrets.
+- [ ] Parser/schema/compiler failures preserve earliest root-cause category and are never overwritten as `solver_capability_gap`.
 - [ ] API response matches documented competition requirements as far as currently specified.
 - [ ] Model configuration uses `.env` as source of truth and documents `SHOPAIKEY_MODEL`, currently `qwen2.5-7b-instruct`, as the open-source <=8B runtime model.
+- [ ] Live parser gate is either passed or explicitly blocked with sanitized evidence; blocked status is never reported as pass.
 - [ ] Evaluation scripts score predictions only outside runtime.
 - [ ] Final tests and local smoke evaluation pass.
 

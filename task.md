@@ -60,6 +60,35 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
 - The early LLM smoke check must use `.env` values for `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL`, send only a tiny runtime-safe prompt, validate basic response shape, and redact all secrets.
 - When the LLM parse-frame extractor is implemented, run a second live smoke check that requests strict compact parse-frame JSON and validates the returned frame shape.
 
+## Parser Contract Hardening / Incident Control Matrix E01-E14
+
+All items below are mandatory (`MUST`) acceptance contracts for future execution batches.
+
+- E01 Raw parser artifacts (sequenced): The pipeline MUST persist parser-stage artifacts in phase-appropriate form:
+  - pre-extractor / provided-or-mock frame phases (Batch 3): `normalized_frame`, `validated_frame`, `compiled_ast`, `rejected`;
+  - extractor-enabled phases (Batch 5 onward): add mandatory `raw LLM response` for every LLM parse attempt.
+  Required artifacts: `frame_events.jsonl` and sanitized `parser_replay_*.jsonl`.
+- E02 Strict relation schema: Frame schema MUST encode relation/object/complement as structured slots (`subject`, `relation`, `object`, optional `complement`) and MUST reject collapsing relation facts into single predicate tokens.
+- E03 Subject/object/complement rule coverage: Validation/compiler MUST preserve argument roles for patterns like `X qualified for Y`, `X completed Y`, and `X eligible for Y`; any role loss MUST fail validation.
+- E04 Clause-side integrity: Compiler/validator MUST reject antecedent/consequent swaps and MUST block object leakage across `if` and `then` sides.
+- E05 No semantic repair in compiler: Compiler MUST be structural lowering only; it MUST NOT read source text to infer or rewrite meaning.
+- E06 Canonicalization scope lock: Canonicalization MUST be lexical-only normalization; semantic alias merge and domain token remapping are prohibited.
+- E07 Negative semantic regression: Test suites MUST include negative semantic tests (sufficient vs necessary, eligible vs needs, awarded vs qualifies without rule chain, option over-aliasing, negation flip, contradiction stress).
+- E08 Prompt hardening contract: Parser prompts MUST enforce relation roles, complements, clause side, source spans, strict JSON-only output, and `ambiguous` output when uncertain.
+- E09 Live parser gate: Credential-gated live parser smoke/quality check MUST be a blocker before proceeding to downstream solver/pipeline hardening; if credentials are unavailable, execution MUST log a blocker and MUST NOT claim gate pass.
+- E10 Root-cause attribution integrity: Parser/schema/compiler failures MUST retain earliest parser-stage root cause and MUST NOT be overwritten as `solver_capability_gap`.
+- E11 Replay fixtures from real failures: Sanitized replay fixtures from real parser incidents MUST be captured and stored as `parser_replay_*.jsonl`.
+- E12 Ambiguous handling: When meaning cannot be preserved, parser MUST emit `ambiguous`; ambiguous frames (including post-repair) MUST NOT compile into fact/rule/claim ASTs.
+- E13 No dataset/domain token map: Static dataset/domain lexicon alias maps are prohibited; only per-request/per-bundle evidence may be used.
+- E14 Numeric strictness parity: Numeric path MUST enforce strict contracts equal to relation path: artifacts, unit/dimension/range/div-zero/NaN/tolerance validation, and no source-text semantic repair.
+
+Cross-batch required artifacts and gates:
+
+- `artifacts/frame_events.jsonl`: mandatory per frame lifecycle event; in Batch 3 it MUST contain at least `normalized_frame`, `validated_frame`, `compiled_ast`, `rejected`, and from Batch 5 onward it MUST include `raw_response` for each LLM parse attempt.
+- `artifacts/parser_replay_*.jsonl`: mandatory sanitized replay fixtures for parser incidents and regressions.
+- `artifacts/numeric_validation_failures.jsonl`: mandatory numeric strict-validation failures and rejection reasons.
+- Live parser gate record: mandatory pass evidence or explicit blocker record in `report.md`; blocked credentials/provider must never be reported as pass.
+
 ## Batch Map / Milestone Map
 
 ### Milestones
@@ -69,37 +98,37 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
 - M2 - Query Contract
   - Batch 2 complete. Cache keys and candidate extraction are defined without answer leakage.
 - M3 - Logic Representation Contract
-  - Batch 3 complete. Parse frames, AST schema, compiler, validation, and normalization are stable.
+  - Batch 3 is next. Parse frames, AST schema, compiler, validation, and normalization must be hardened by E01-E14 contracts.
 - M4 - Observability Foundation
-  - Batch 4 complete. Proof/debug trace infrastructure exists before complex reasoning.
+  - Batch 4 pending. Proof/debug trace infrastructure and root-cause integrity will be hardened.
 - M5 - LLM Semantic Parser
-  - Batch 5 complete. Runtime can extract compact parse frames through a mockable configured LLM client.
+  - Batch 5 pending. Runtime parser prompt/extractor contract and live parser gate will be hardened.
 - M6 - Async Runtime Skeleton
-  - Batch 6 complete. Local/API pipeline orchestration, premise cache, and single-flight behavior work.
+  - Batch 6 pending.
 - M7 - Numeric Reasoning Layer
-  - Batch 7 complete. Numeric evidence and derived facts are extracted with provenance.
+  - Batch 7 pending. Numeric strict-validation and artifacts will be hardened.
 - M8 - Core Symbolic Reasoning
-  - Batch 8 complete. Horn, safe contraposition, bounded quantifiers, and answer decision work.
+  - Batch 8 pending. Negative semantic protections and parser-vs-solver boundaries will be hardened.
 - M8.5 - Numeric Layer Maintainability
-  - Batch 8.5 complete. The Batch 7 numeric layer is split into focused modules without changing runtime behavior.
+  - Batch 8.5 pending.
 - M8.6 - LLM Parser Prompt Hardening
-  - Batch 8.6 complete. Premise and candidate parse-frame prompts are stronger, schema-grounded, and tested with live/runtime-safe parser smoke.
+  - Batch 8.6 pending.
 - M9 - Extended Verification
-  - Batch 9 complete. Z3 routing and confidence-capped fallback cover supported harder fragments.
+  - Batch 9 pending. Routing/fallback must preserve parser-root-cause attribution.
 - M9.5 - Solver Citation Enrichment
-  - Batch 9.5 complete. Solver proof steps preserve source text and citation metadata needed by public explanations.
+  - Batch 9.5 pending.
 - M9.6 - Proof Trace Explanation Readiness
-  - Batch 9.6 complete. Proof traces are explanation-ready before public output formatting and adapters.
+  - Batch 9.6 pending.
 - M9.7 - Parser/AST Canonicalization Hardening
-  - Batch 9.7 not yet complete. Bundle-local parser/AST canonicalization has been hardened, but live provider-stable smoke acceptance is still pending.
+  - Batch 9.7 pending.
 - M10 - Public Output Layer
-  - Batch 10 complete. Proof-trace explanations, open-ended fallback, and MCQ submission adapter work.
+  - Batch 10 pending.
 - M11 - Submission API
-  - Batch 11 complete. A competition-compatible prediction endpoint exists.
+  - Batch 11 pending.
 - M12 - Evaluation Loop
-  - Batch 12 complete. Local evaluation, scoring, and error analysis are separated from runtime.
+  - Batch 12 pending.
 - M13 - Final Hardening
-  - Batch 13 complete. Regression coverage, docs, and smoke validation are ready.
+  - Batch 13 pending.
 
 ### Batch Sequence
 
@@ -288,16 +317,18 @@ Every later reasoning layer depends on stable semantics. The LLM must produce co
 ### Exact Task List
 
 - B3-T1: Implement parse-frame models for `rule`, `fact`, `claim`, `compound`, and `ambiguous`.
-- B3-T2: Implement frame slot models for `predicate`, `numeric_condition`, `numeric_value`, `arithmetic_expression`, and `entity_relation`.
+- B3-T2: Implement frame slot models for `predicate`, `numeric_condition`, `numeric_value`, `arithmetic_expression`, and `entity_relation` with strict role fields (`subject`, `relation`, `object`, optional `complement`) where applicable.
 - B3-T3: Implement typed AST node models for `pred`, `not`, `and`, `or`, `implies`, `forall`, `exists`, `compare`, `arith`, and `num_ref`.
 - B3-T4: Implement term models for variables, constants, and numbers.
-- B3-T5: Implement frame validation for required slots, allowed enums, source metadata, numeric operators, and ambiguous frames.
-- B3-T6: Implement deterministic frame-to-AST compilation for rules, facts, claims, numeric slots, and source metadata.
-- B3-T7: Implement AST validation for metadata, variable binding, predicate arity, numeric operands, and malformed scopes.
-- B3-T8: Implement normalization for predicate names, associative connectives, double negation, and metadata preservation.
-- B3-T9: Preserve nested implications as tree structures; do not rewrite implication direction during normalization.
-- B3-T10: Add tests for valid/invalid frames, compiler outputs, AST validation failures, and source metadata survival.
-- B3-T11: Append Batch 3 execution details to `report.md`.
+- B3-T5: Implement frame validation for required slots, allowed enums, source metadata, numeric operators, ambiguous frames, and clause-side integrity (`if`/`then` separation).
+- B3-T6: Implement deterministic frame-to-AST compilation for rules, facts, claims, numeric slots, and source metadata with structural lowering only (no semantic repair from source text).
+- B3-T7: Implement AST validation for metadata, variable binding, predicate arity, numeric operands, malformed scopes, and relation argument preservation.
+- B3-T8: Implement lexical-only normalization for predicate names and associative connectives while preserving implication direction and metadata; forbid semantic alias merge/domain token maps.
+- B3-T9: Preserve nested implications as tree structures; reject antecedent/consequent swaps.
+- B3-T10: Enforce that `ambiguous` frames never compile to fact/rule/claim AST nodes.
+- B3-T11: Emit parser lifecycle artifacts into `artifacts/frame_events.jsonl` for `normalized_frame`, `validated_frame`, `compiled_ast`, and rejected events.
+- B3-T12: Add tests for valid/invalid frames, compiler outputs, role preservation, clause-side integrity, ambiguous compile blocking, canonicalization limits, and source metadata survival.
+- B3-T13: Append Batch 3 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -318,6 +349,7 @@ Every later reasoning layer depends on stable semantics. The LLM must produce co
 - Deterministic frame-to-AST compiler.
 - Frame and AST validators.
 - Normalization utilities.
+- `artifacts/frame_events.jsonl` contract for parse/compile lifecycle events.
 - Tests for schema and compiler behavior.
 
 ### Acceptance Criteria
@@ -325,6 +357,11 @@ Every later reasoning layer depends on stable semantics. The LLM must produce co
 - All required parse-frame kinds validate.
 - Rule/fact/claim frames compile to expected AST structures.
 - Numeric frame slots compile into numeric AST nodes.
+- Relation facts preserve `subject`/`object`/`complement` roles and reject collapsed single-predicate loss.
+- Clause side integrity is enforced; `if` and `then` cannot be swapped or cross-contaminated.
+- Compiler performs structural lowering only and does not recover meaning from source text.
+- `ambiguous` frames are blocked from fact/rule/claim compilation.
+- Canonicalization is lexical-only and does not perform dataset/domain semantic mapping.
 - Invalid scopes and malformed numeric expressions fail clearly.
 - Source metadata survives compilation and normalization.
 
@@ -333,6 +370,7 @@ Every later reasoning layer depends on stable semantics. The LLM must produce co
 - `python -m unittest tests/test_parse_frames.py`
 - `python -m unittest tests/test_frame_compiler.py`
 - `python -m unittest tests/test_logic_ast.py`
+- Added negative parser-contract tests for relation-role loss, clause swap, ambiguous compile blocking, and canonicalization overreach.
 - Relevant earlier tests.
 
 ### Explicit Non-Goals
@@ -343,11 +381,11 @@ Every later reasoning layer depends on stable semantics. The LLM must produce co
 
 ### Completion Checklist
 
-- [x] Parse-frame models exist.
-- [x] Typed AST models exist.
-- [x] Frame-to-AST compiler exists.
-- [x] Validation and normalization tests pass.
-- [x] `report.md` contains Batch 3 result.
+- [ ] Parse-frame models exist.
+- [ ] Typed AST models exist.
+- [ ] Frame-to-AST compiler exists.
+- [ ] Validation and normalization tests pass.
+- [ ] `report.md` contains Batch 3 result.
 
 ## Mandatory Batch 4 - Debug Trace and Proof Trace Infrastructure
 
@@ -372,10 +410,12 @@ The project needs root-cause visibility. Later LLM, numeric, symbolic, fallback,
 - B4-T3: Define debug trace schema with `sample_id`, `record_id`, `question_id`, stage statuses, timestamps/durations, cache metadata, warnings, and root-cause category.
 - B4-T4: Define proof trace step schema with used premises, derived facts, solver route, numeric derivations, and source citations.
 - B4-T5: Add root-cause categories for data validation, question parsing, LLM frame extraction, frame validation, frame compilation, AST validation, numeric failure, solver unsupported, Z3 encoding, fallback, timeout, and output formatting.
-- B4-T6: Implement safe serialization and secret redaction for traces.
-- B4-T7: Implement JSON/JSONL artifact writers for local debug output.
-- B4-T8: Add tests that traces serialize safely and never include `.env` secrets or reference-only fields.
-- B4-T9: Append Batch 4 execution details to `report.md`.
+- B4-T6: Enforce earliest-root-cause preservation: parser/schema/compiler failures MUST NOT be overwritten to `solver_capability_gap`.
+- B4-T7: Implement safe serialization and secret redaction for traces.
+- B4-T8: Implement JSON/JSONL artifact writers for local debug output.
+- B4-T9: Add artifact writers/contracts for `artifacts/frame_events.jsonl`, `artifacts/parser_replay_*.jsonl`, and `artifacts/numeric_validation_failures.jsonl`.
+- B4-T10: Add tests that traces serialize safely, preserve earliest root cause, and never include `.env` secrets or reference-only fields.
+- B4-T11: Append Batch 4 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -390,12 +430,14 @@ The project needs root-cause visibility. Later LLM, numeric, symbolic, fallback,
 - Root-cause category list.
 - Safe JSON/JSONL artifact writing utility.
 - Early LLM connectivity smoke result recorded in `report.md` as passed, failed, or blocked with sanitized details.
+- Root-cause attribution policy proving parser-stage failures are never recategorized as solver capability gaps.
 
 ### Acceptance Criteria
 
 - Trace serialization is deterministic and secret-safe.
 - Root-cause categories are stable and test-covered.
 - Trace objects can reference runtime IDs without containing gold answers or FOL.
+- Earliest parser/root-cause category remains intact through downstream routing/decision stages.
 - Live LLM connectivity has been tested from `.env` when credentials/service are available, or the exact sanitized blocker is documented.
 
 ### Required Tests or Validations
@@ -403,6 +445,7 @@ The project needs root-cause visibility. Later LLM, numeric, symbolic, fallback,
 - `python -m unittest tests/test_debug_trace.py`
 - Earlier tests that may interact with trace models.
 - Early LLM connectivity smoke command using configured `.env`, or a documented blocked live validation with sanitized details.
+- Root-cause attribution regression tests (parser failure must not end as `solver_capability_gap`).
 
 ### Explicit Non-Goals
 
@@ -412,11 +455,11 @@ The project needs root-cause visibility. Later LLM, numeric, symbolic, fallback,
 
 ### Completion Checklist
 
-- [x] Debug trace schema exists.
-- [x] Proof trace schema exists.
-- [x] Redaction tests pass.
-- [x] Early LLM connectivity smoke is passed or honestly reported as blocked.
-- [x] `report.md` contains Batch 4 result.
+- [ ] Debug trace schema exists.
+- [ ] Proof trace schema exists.
+- [ ] Redaction tests pass.
+- [ ] Early LLM connectivity smoke is passed or honestly reported as blocked.
+- [ ] `report.md` contains Batch 4 result.
 
 ## Mandatory Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
 
@@ -440,15 +483,16 @@ The LLM is the semantic parser in the approved flow. This batch connects natural
 - B5-T1: Define a frame extractor interface that accepts only runtime text and source metadata.
 - B5-T2: Implement a mock frame extractor for deterministic tests.
 - B5-T3: Implement async ShopAIKey/OpenAI-compatible HTTP client reading `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL` from config.
-- B5-T4: Build separate prompt templates for premise frame extraction and candidate frame extraction.
+- B5-T4: Build separate prompt templates for premise frame extraction and candidate frame extraction with strict JSON-only output.
 - B5-T5: Enforce strict JSON parsing and parse-frame validation.
-- B5-T6: Implement repair prompts that include only original runtime text and validation errors.
+- B5-T6: Implement repair prompts that include only original runtime text and validation errors, and require `ambiguous` output when meaning cannot be preserved.
 - B5-T7: Implement transient failure retry with exponential backoff and jitter.
 - B5-T8: Cache parse frames by normalized source text, prompt version, extractor version, and model identifier.
-- B5-T9: Track model identifier, prompt version, attempts, repair count, cache hit, and sanitized errors in debug traces.
-- B5-T10: Add tests for valid mock frame, invalid frame repair, transient retry, cache hit, and reference-field exclusion.
-- B5-T11: Add required credential-gated live parse-frame smoke validation when `.env` contains `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL`; report sanitized blockers honestly if provider access fails.
-- B5-T12: Append Batch 5 execution details to `report.md`.
+- B5-T9: Track model identifier, prompt version, attempts, repair count, cache hit, and sanitized errors in debug traces and `artifacts/frame_events.jsonl`, including `raw_response` for every LLM parse attempt.
+- B5-T10: Persist sanitized real-failure replay fixtures as `artifacts/parser_replay_*.jsonl`.
+- B5-T11: Add tests for valid mock frame, invalid frame repair, transient retry, cache hit, reference-field exclusion, clause-side preservation, role preservation, and ambiguous-on-uncertain behavior.
+- B5-T12: Run required credential-gated live parse-frame smoke validation when `.env` contains `SHOPAIKEY_BASE_URL`, `SHOPAIKEY_API_KEY`, and `SHOPAIKEY_MODEL`; if unavailable/failing, record blocker and do not claim gate pass.
+- B5-T13: Append Batch 5 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -464,6 +508,8 @@ The LLM is the semantic parser in the approved flow. This batch connects natural
 - Prompt templates for premise and candidate parsing.
 - Repair and retry behavior.
 - Parse-frame cache.
+- `artifacts/frame_events.jsonl` updates including `raw_response` lifecycle events.
+- Sanitized parser replay fixtures: `artifacts/parser_replay_*.jsonl`.
 - Tests for extraction behavior.
 
 ### Acceptance Criteria
@@ -473,6 +519,7 @@ The LLM is the semantic parser in the approved flow. This batch connects natural
 - Transient failures retry with backoff.
 - Runtime frame extractor input excludes `premises-FOL`, `answer`, `explanation`, and `idx`.
 - Production path uses configured `.env` model and does not silently switch provider.
+- Prompt contract preserves relation roles/complements/clause side and returns `ambiguous` on unresolved uncertainty.
 - Live parse-frame smoke succeeds when provider access is available, or the blocker is documented with sanitized details.
 
 ### Required Tests or Validations
@@ -480,6 +527,7 @@ The LLM is the semantic parser in the approved flow. This batch connects natural
 - `python -m unittest tests/test_llm_frame_extraction.py`
 - Relevant previous tests.
 - Live parse-frame smoke command using configured `.env` model when required settings are present, or a documented blocked live validation with sanitized details.
+- Added prompt contract tests for JSON-only, role/clause preservation, and ambiguous-on-uncertain.
 
 ### Explicit Non-Goals
 
@@ -487,15 +535,16 @@ The LLM is the semantic parser in the approved flow. This batch connects natural
 - Do not ask the LLM for full ASTs in the main path.
 - Do not include gold FOL or gold answers in prompts.
 - Do not treat mocked tests as sufficient when configured live provider access is available.
+- Do not allow repair prompts to infer meaning beyond the original source text.
 
 ### Completion Checklist
 
-- [x] Frame extractor interface exists.
-- [x] Mock extractor exists.
-- [x] Configured async client exists.
-- [x] Repair/retry/cache behavior is tested.
-- [x] Live parse-frame smoke is passed or honestly reported as blocked.
-- [x] `report.md` contains Batch 5 result.
+- [ ] Frame extractor interface exists.
+- [ ] Mock extractor exists.
+- [ ] Configured async client exists.
+- [ ] Repair/retry/cache behavior is tested.
+- [ ] Live parse-frame smoke is passed or honestly reported as blocked.
+- [ ] `report.md` contains Batch 5 result.
 
 ## Mandatory Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
 
@@ -562,11 +611,11 @@ The project will call an LLM through an API key. Without async execution and sha
 
 ### Completion Checklist
 
-- [x] Async scheduler exists.
-- [x] Local/API cache modes exist.
-- [x] Single-flight locks are tested.
-- [x] Failure isolation works.
-- [x] `report.md` contains Batch 6 result.
+- [ ] Async scheduler exists.
+- [ ] Local/API cache modes exist.
+- [ ] Single-flight locks are tested.
+- [ ] Failure isolation works.
+- [ ] `report.md` contains Batch 6 result.
 
 ## Mandatory Batch 7 - Numeric Layer with Source Provenance
 
@@ -593,10 +642,12 @@ Some records require numerical reasoning. The system must detect numeric reasoni
 - B7-T5: Evaluate deterministic arithmetic such as percentages, averages, thresholds, weighted scores, fees, and date/time offsets.
 - B7-T6: Insert derived numeric facts into solver context and proof trace.
 - B7-T7: Detect conflicts between AST-derived and source-text-derived numeric facts; prefer validated AST and trace the conflict.
-- B7-T8: Route harder numeric constraints to Z3-compatible forms.
-- B7-T9: Add tests for percentages, GPA, scores, averages, thresholds, durations, and comparison phrases.
-- B7-T10: Add tests proving numeric routing is based on numeric frame/AST features, not record IDs.
-- B7-T11: Append Batch 7 execution details to `report.md`.
+- B7-T8: Enforce strict numeric validation gates for unit/dimension compatibility, range checks, divide-by-zero, NaN/Inf, and tolerance policy.
+- B7-T9: Route harder numeric constraints to Z3-compatible forms.
+- B7-T10: Write numeric strict-validation failures to `artifacts/numeric_validation_failures.jsonl`.
+- B7-T11: Add tests for percentages, GPA, scores, averages, thresholds, durations, comparison phrases, unit/dimension mismatch, divide-by-zero, NaN/Inf handling, and tolerance boundaries.
+- B7-T12: Add tests proving numeric routing is based on numeric frame/AST features, not record IDs.
+- B7-T13: Append Batch 7 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -610,6 +661,7 @@ Some records require numerical reasoning. The system must detect numeric reasoni
 - Deterministic numeric evaluator.
 - Numeric provenance model.
 - Numeric proof-trace integration.
+- `artifacts/numeric_validation_failures.jsonl` for strict numeric gate failures.
 - Tests for numeric scenarios.
 
 ### Acceptance Criteria
@@ -617,11 +669,14 @@ Some records require numerical reasoning. The system must detect numeric reasoni
 - Numeric derived facts cite their source premises/candidates.
 - Percentages, averages, thresholds, and time comparisons are covered.
 - Numeric parse failures produce traceable warnings.
+- Numeric validation rejects unit/dimension mismatches, invalid ranges, divide-by-zero, NaN/Inf, and out-of-policy tolerance comparisons.
+- Numeric layer performs no source-text semantic repair; source text can supplement extraction but cannot redefine validated frame/AST meaning.
 - No numeric route depends on sample ID, record ID, question ID, or gold answer.
 
 ### Required Tests or Validations
 
 - `python -m unittest tests/test_numeric_layer.py`
+- Added numeric strict-gate tests for unit/dimension/range/div-zero/NaN/tolerance.
 - Relevant earlier tests.
 
 ### Explicit Non-Goals
@@ -632,11 +687,11 @@ Some records require numerical reasoning. The system must detect numeric reasoni
 
 ### Completion Checklist
 
-- [x] Numeric extraction exists.
-- [x] Deterministic arithmetic works for required cases.
-- [x] Provenance is preserved.
-- [x] Anti-hardcode numeric tests pass.
-- [x] `report.md` contains Batch 7 result.
+- [ ] Numeric extraction exists.
+- [ ] Deterministic arithmetic works for required cases.
+- [ ] Provenance is preserved.
+- [ ] Anti-hardcode numeric tests pass.
+- [ ] `report.md` contains Batch 7 result.
 
 ## Mandatory Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
 
@@ -667,8 +722,10 @@ The system needs deterministic proof-backed reasoning before extended Z3/fallbac
 - B8-T9: Implement Yes/No/Unknown answer decision.
 - B8-T10: Implement local MCQ answer selection with `Unknown` allowed when no unique option is provable.
 - B8-T11: Add proof trace steps for every derived fact and answer decision.
-- B8-T12: Add tests for Horn rules, safe/unsafe contraposition, quantifiers, candidate entailment, and answer decision.
-- B8-T13: Append Batch 8 execution details to `report.md`.
+- B8-T12: Enforce parser/compile failure short-circuit so unresolved parser/schema/compiler errors are not classified as solver capability gaps.
+- B8-T13: Add negative semantic tests: sufficient != necessary, eligible != needs, awarded != qualifies without rule chain, MCQ option over-aliasing rejection, negation flip, contradiction stress.
+- B8-T14: Add tests for Horn rules, safe/unsafe contraposition, quantifiers, candidate entailment, answer decision, and root-cause attribution boundaries.
+- B8-T15: Append Batch 8 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -698,6 +755,8 @@ The system needs deterministic proof-backed reasoning before extended Z3/fallbac
 - Supported quantifier cases instantiate over discovered constants only.
 - Unknown is returned when neither claim nor negation is entailed.
 - MCQ local behavior can return `Unknown` when no unique option is proved.
+- Solver never rewrites parser/schema/compiler failures into `solver_capability_gap`.
+- Negative semantic regression tests prevent role/meaning drift from being counted as valid entailment.
 
 ### Required Tests or Validations
 
@@ -705,6 +764,7 @@ The system needs deterministic proof-backed reasoning before extended Z3/fallbac
 - `python -m unittest tests/test_contraposition.py`
 - `python -m unittest tests/test_quantifiers.py`
 - `python -m unittest tests/test_answer_decision.py`
+- Added negative semantic regression tests and parser-vs-solver attribution tests.
 - Relevant earlier tests.
 
 ### Explicit Non-Goals
@@ -715,11 +775,11 @@ The system needs deterministic proof-backed reasoning before extended Z3/fallbac
 
 ### Completion Checklist
 
-- [x] Horn prover exists.
-- [x] Safe contraposition is tested.
-- [x] Quantifier behavior is bounded and tested.
-- [x] Answer decision works.
-- [x] `report.md` contains Batch 8 result.
+- [ ] Horn prover exists.
+- [ ] Safe contraposition is tested.
+- [ ] Quantifier behavior is bounded and tested.
+- [ ] Answer decision works.
+- [ ] `report.md` contains Batch 8 result.
 
 ## Mandatory Batch 8.5 - Numeric Layer Modularization and Maintainability
 
@@ -799,11 +859,11 @@ Batch 7 intentionally kept numeric extraction, merge logic, deterministic evalua
 
 ### Completion Checklist
 
-- [x] Numeric responsibilities are split into focused modules.
-- [x] `app/numeric/layer.py` is a thin orchestration layer.
-- [x] Public numeric imports remain stable.
-- [x] Numeric behavior regression tests pass.
-- [x] `report.md` contains Batch 8.5 result and file-size notes.
+- [ ] Numeric responsibilities are split into focused modules.
+- [ ] `app/numeric/layer.py` is a thin orchestration layer.
+- [ ] Public numeric imports remain stable.
+- [ ] Numeric behavior regression tests pass.
+- [ ] `report.md` contains Batch 8.5 result and file-size notes.
 
 ## Mandatory Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
 
@@ -877,11 +937,11 @@ The parser prompt is currently the most fragile root-cause point in the pipeline
 
 ### Completion Checklist
 
-- [x] Parser prompts are hardened for approved frame/slot/numeric/nested cases.
-- [x] Prompt/cache versioning is updated when needed.
-- [x] Prompt regression tests pass.
-- [x] Live parse-frame smoke passes or a sanitized blocker is reported.
-- [x] `report.md` contains Batch 8.6 result.
+- [ ] Parser prompts are hardened for approved frame/slot/numeric/nested cases.
+- [ ] Prompt/cache versioning is updated when needed.
+- [ ] Prompt regression tests pass.
+- [ ] Live parse-frame smoke passes or a sanitized blocker is reported.
+- [ ] `report.md` contains Batch 8.6 result.
 
 ## Mandatory Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 
@@ -909,9 +969,10 @@ Some dataset questions include arithmetic, grounded Boolean constraints, or nest
 - B9-T6: Implement semantic fallback verifier for cases where symbolic routes cannot produce a strong result.
 - B9-T7: Cap fallback confidence below successful symbolic proof confidence.
 - B9-T8: Prevent fallback from overriding a symbolic proof.
-- B9-T9: Record solver route, unsupported features, Z3 status, fallback use, and confidence penalties in traces.
-- B9-T10: Add tests for route selection, supported Z3 cases, unsupported nested implication, fallback confidence cap, and fallback override prevention.
-- B9-T11: Append Batch 9 execution details to `report.md`.
+- B9-T9: Block fallback when upstream parser/schema/compiler stage is unresolved; preserve upstream root-cause category.
+- B9-T10: Record solver route, unsupported features, Z3 status, fallback use, confidence penalties, and parser-stage blockers in traces.
+- B9-T11: Add tests for route selection, supported Z3 cases, unsupported nested implication, fallback confidence cap, fallback override prevention, and parser-stage root-cause preservation.
+- B9-T12: Append Batch 9 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -929,6 +990,7 @@ Some dataset questions include arithmetic, grounded Boolean constraints, or nest
 - Z3 adapter for grounded supported fragments.
 - Semantic fallback verifier.
 - Confidence and trace integration.
+- Root-cause preservation across router/fallback boundaries.
 
 ### Acceptance Criteria
 
@@ -936,12 +998,14 @@ Some dataset questions include arithmetic, grounded Boolean constraints, or nest
 - Unsupported nested implication returns `solver_capability_gap`.
 - Fallback cannot override symbolic proof.
 - Fallback confidence is capped and trace-visible.
+- Parser/schema/compiler failures never become fallback-only outcomes or `solver_capability_gap`.
 
 ### Required Tests or Validations
 
 - `python -m unittest tests/test_solver_routing.py`
 - `python -m unittest tests/test_z3_adapter.py`
 - `python -m unittest tests/test_semantic_fallback.py`
+- Added attribution tests ensuring parser-stage failures stay parser-stage.
 - Relevant earlier tests.
 
 ### Explicit Non-Goals
@@ -952,11 +1016,11 @@ Some dataset questions include arithmetic, grounded Boolean constraints, or nest
 
 ### Completion Checklist
 
-- [x] Solver router exists.
-- [x] Z3 adapter handles supported fragments.
-- [x] Unsupported fragments are explicit.
-- [x] Semantic fallback is confidence-capped.
-- [x] `report.md` contains Batch 9 result.
+- [ ] Solver router exists.
+- [ ] Z3 adapter handles supported fragments.
+- [ ] Unsupported fragments are explicit.
+- [ ] Semantic fallback is confidence-capped.
+- [ ] `report.md` contains Batch 9 result.
 
 ## Mandatory Batch 9.5 - Solver Citation Source-Text Enrichment
 
@@ -1028,11 +1092,11 @@ Batch 8 solver proof steps currently preserve logical derivations and premise ID
 
 ### Completion Checklist
 
-- [x] Solver proof citations include source text where available.
-- [x] Missing source text warnings are trace-visible.
-- [x] Citation safety tests pass.
-- [x] Entailment and answer behavior remain unchanged.
-- [x] `report.md` contains Batch 9.5 result.
+- [ ] Solver proof citations include source text where available.
+- [ ] Missing source text warnings are trace-visible.
+- [ ] Citation safety tests pass.
+- [ ] Entailment and answer behavior remain unchanged.
+- [ ] `report.md` contains Batch 9.5 result.
 
 ## Mandatory Batch 9.6 - Proof Trace Explanation Readiness
 
@@ -1101,11 +1165,11 @@ Explanation quality is a scoring dimension. Before building the public output la
 
 ### Completion Checklist
 
-- [x] Explanation-ready proof-trace contract exists.
-- [x] Route, numeric, citation, and decision details are represented.
-- [x] Trace ordering is deterministic.
-- [x] Runtime safety tests pass.
-- [x] `report.md` contains Batch 9.6 result.
+- [ ] Explanation-ready proof-trace contract exists.
+- [ ] Route, numeric, citation, and decision details are represented.
+- [ ] Trace ordering is deterministic.
+- [ ] Runtime safety tests pass.
+- [ ] `report.md` contains Batch 9.6 result.
 
 ## Mandatory Batch 9.7 - Parser/AST Canonicalization and Entailment Smoke Hardening
 
@@ -1122,18 +1186,18 @@ Live two-record smoke after Batch 9.6 reached the solver but returned `Unknown` 
 - Batches 1-9.6 outputs.
 - Existing LLM parse-frame extractor, prompts, frame schema, compiler, AST validation, normalization, Horn solver, router, proof-trace readiness helpers, and debug traces.
 - `flow.md` sections on parse frames, frame-to-AST compilation, AST validation/normalization, solver routing, and debug trace root-cause reporting.
-- `PLAN.md` predicate mismatch mitigation: per-premise-bundle predicate map, arity checks, and phrase alias tracking.
+- `PLAN.md` predicate mismatch mitigation: per-premise-bundle lexical phrase map, arity checks, and subject/object preservation.
 - Recent smoke artifacts may be used only as diagnostic evidence; runtime code must still use only `premises-NL` and `question`.
 
 ### Exact Task List
 
 - B9.7-T1: Reproduce or inspect the current two-record LLM smoke traces and summarize the exact parser/AST root causes in `report.md`.
 - B9.7-T2: Audit premise and candidate frames after LLM extraction and deterministic compilation for entity drift, predicate drift, arity mismatch, generic class phrase mismatch, and subject/object loss.
-- B9.7-T3: Implement bundle-local predicate/entity canonicalization derived only from current runtime source text, validated frames, and compiled AST metadata.
-- B9.7-T4: Preserve source metadata while aligning singular/plural class phrases, named instances, and compatible role/domain phrases within the same premise bundle.
+- B9.7-T3: Implement bundle-local lexical normalization derived only from current runtime source text, validated frames, and compiled AST metadata.
+- B9.7-T4: Preserve source metadata while applying lexical-only normalization within the same premise bundle (casing, separator style, singular/plural morphology) and forbid semantic synonym merging/static maps.
 - B9.7-T5: Harden frame compilation or normalization so relation-like facts keep their meaningful subject and object arguments instead of collapsing into argumentless or wrong-subject predicates.
 - B9.7-T6: Ensure Horn, bounded quantifier, safe contraposition, and router paths consume the canonicalized AST consistently without changing proof citations or source-text provenance.
-- B9.7-T7: Add synthetic, non-dataset-specific tests for multi-step educational eligibility chains, generic project/code rule chains, predicate/entity aliasing, and subject/object preservation.
+- B9.7-T7: Add synthetic, non-dataset-specific tests for multi-step educational eligibility chains, generic project/code rule chains, lexical normalization boundaries, and subject/object preservation.
 - B9.7-T8: Add anti-overfit tests proving canonicalization does not depend on `record_id`, `sample_id`, `question_id`, option label, gold answer, gold explanation, `idx`, or `premises-FOL`.
 - B9.7-T9: Run the live `.env` two-record LLM smoke with `--max-concurrency 2` after the fix, compare against the previous all-`Unknown` trace, and report whether remaining `Unknown` outputs are due to parser, compiler, solver capability, or provider instability.
 - B9.7-T10: Append Batch 9.7 execution details to `report.md`, including file-size notes and any remaining root-cause risks.
@@ -1154,18 +1218,18 @@ Live two-record smoke after Batch 9.6 reached the solver but returned `Unknown` 
 
 ### Required Outputs / Artifacts
 
-- Bundle-local predicate/entity canonicalization or alias-map behavior.
+- Bundle-local lexical normalization behavior only (no semantic synonym merging or static maps).
 - Subject/object preserving compilation or normalization for relation-like facts.
 - Trace-visible canonicalization diagnostics or warnings when alignment is applied or rejected.
-- Regression tests for chain entailment, aliasing, subject/object preservation, and anti-overfit boundaries.
+- Regression tests for chain entailment, lexical normalization boundaries, subject/object preservation, and anti-overfit boundaries.
 - Updated two-record smoke artifacts or a documented provider blocker.
 - Batch 9.7 report entry.
 
 ### Acceptance Criteria
 
-- Synthetic chain tests prove that semantically equivalent premise/candidate phrasing can entail the expected claim without using dataset-specific mappings.
+- Synthetic chain tests prove lexical normalization handles formatting/morphology drift without semantic synonym merging or static dataset/domain maps.
 - Relation-like facts preserve enough argument structure for downstream Horn/quantifier reasoning.
-- Canonicalization is bundle-local, deterministic, trace-visible, and source-cited.
+- Canonicalization is bundle-local, lexical-only, deterministic, trace-visible, and source-cited.
 - No runtime path reads or depends on `premises-FOL`, `answer`, `explanation`, `idx`, record IDs, sample IDs, question IDs, or option labels for entailment.
 - The two-record LLM smoke no longer fails as all-`Unknown` solely because of parser/AST subject/object loss or predicate/entity drift; if provider instability or a deeper solver gap remains, the exact sanitized root cause is reported.
 
@@ -1187,12 +1251,12 @@ Live two-record smoke after Batch 9.6 reached the solver but returned `Unknown` 
 
 ### Completion Checklist
 
-- [x] Parser/AST root cause from the all-`Unknown` smoke is documented.
-- [x] Bundle-local canonicalization exists and is tested.
-- [x] Relation subject/object preservation is tested.
-- [x] Anti-overfit/leakage tests pass.
-- [x] Two-record live LLM smoke is rerun and reported.
-- [x] `report.md` contains Batch 9.7 result.
+- [ ] Parser/AST root cause from the all-`Unknown` smoke is documented.
+- [ ] Bundle-local canonicalization exists and is tested.
+- [ ] Relation subject/object preservation is tested.
+- [ ] Anti-overfit/leakage tests pass.
+- [ ] Two-record live LLM smoke is rerun and reported.
+- [ ] `report.md` contains Batch 9.7 result.
 
 ## Mandatory Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 
@@ -1362,11 +1426,13 @@ Performance must be measurable, but labels and reference annotations must not in
 - B12-T3: Write ordered `predictions.json` public-like artifact.
 - B12-T4: Write sanitized `debug_traces.jsonl`.
 - B12-T5: Implement scoring against `answer` only after prediction is complete.
-- B12-T6: Implement error aggregation by question type, solver route, fallback use, cache mode, and root-cause category.
-- B12-T7: Write `error_summary.json`.
-- B12-T8: Add tests proving scorer/analyzer may read references but runtime cannot.
-- B12-T9: Add small fixture smoke run for local evaluation.
-- B12-T10: Append Batch 12 execution details to `report.md`.
+- B12-T6: Implement error aggregation by question type, solver route, fallback use, cache mode, and root-cause category with earliest-stage attribution preserved.
+- B12-T7: Add parser-vs-solver separation reports so parser/schema/compiler incidents are never aggregated as solver capability gaps.
+- B12-T8: Persist parser incident artifacts (`parser_replay_*.jsonl`) and numeric strict-validation artifacts (`numeric_validation_failures.jsonl`) in evaluation outputs.
+- B12-T9: Write `error_summary.json` and an incident-control summary mapped to E01-E14.
+- B12-T10: Add tests proving scorer/analyzer may read references but runtime cannot, and root-cause attribution is stable.
+- B12-T11: Add small fixture smoke run for local evaluation.
+- B12-T12: Append Batch 12 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -1383,6 +1449,7 @@ Performance must be measurable, but labels and reference annotations must not in
 - Scoring script.
 - Error analysis script.
 - Prediction/debug/error artifacts.
+- Incident-control artifact outputs: `parser_replay_*.jsonl`, `numeric_validation_failures.jsonl`, and E01-E14 summary.
 - Tests for evaluation boundaries.
 
 ### Acceptance Criteria
@@ -1390,12 +1457,14 @@ Performance must be measurable, but labels and reference annotations must not in
 - Evaluation reads references only in scorer/analyzer.
 - Runtime pipeline receives sanitized inputs only.
 - Error summary is grouped and actionable.
+- Parser/schema/compiler errors remain parser-attributed and are never recategorized as solver gaps.
 - Failed samples produce traceable outputs instead of stopping the run.
 
 ### Required Tests or Validations
 
 - `python -m unittest tests/test_evaluation_scripts.py`
 - Local smoke run on a small fixture dataset.
+- Added attribution-stability tests and incident artifact presence checks.
 - Relevant earlier tests.
 
 ### Explicit Non-Goals
@@ -1435,13 +1504,16 @@ After all components exist, the project needs end-to-end confidence that the imp
 - B13-T2: Add timeout and rate-limit regression tests.
 - B13-T3: Add local/API cache hit-count regression tests.
 - B13-T4: Add final leakage tests for prompts, frame extractor inputs, compiler inputs, solver inputs, explanations, debug traces, API responses, and predictions.
-- B13-T5: Document configured model choice from `.env`, currently `SHOPAIKEY_MODEL=qwen2.5-7b-instruct`, without exposing secrets.
-- B13-T6: Document any external data/model usage for the one-page solution description.
-- B13-T7: Run the full unit test suite.
-- B13-T8: Run local evaluation smoke test.
-- B13-T9: Run API smoke test with mocked or configured model endpoint.
-- B13-T10: Review all touched files over 200 lines and document line counts/rationale in `report.md`.
-- B13-T11: Update final progress tracker and append Batch 13 execution details to `report.md`.
+- B13-T5: Add parser-contract regression suite for E01-E14 (relation roles, clause integrity, ambiguous handling, canonicalization limits, numeric strictness, no semantic repair).
+- B13-T6: Verify required artifacts exist and are populated: `frame_events.jsonl`, `parser_replay_*.jsonl`, and `numeric_validation_failures.jsonl`.
+- B13-T7: Verify live parser gate status is either passed or explicitly blocked with sanitized evidence; never treat missing credentials as pass.
+- B13-T8: Document configured model choice from `.env`, currently `SHOPAIKEY_MODEL=qwen2.5-7b-instruct`, without exposing secrets.
+- B13-T9: Document any external data/model usage for the one-page solution description.
+- B13-T10: Run the full unit test suite.
+- B13-T11: Run local evaluation smoke test.
+- B13-T12: Run API smoke test with mocked or configured model endpoint.
+- B13-T13: Review all touched files over 200 lines and document line counts/rationale in `report.md`.
+- B13-T14: Update final progress tracker and append Batch 13 execution details to `report.md`.
 
 ### Files or Modules Likely Created or Updated
 
@@ -1456,6 +1528,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - Final validation results.
 - Model/config documentation.
 - Solution description notes.
+- Final parser/numeric incident-control artifact bundle and gate evidence.
 - Final `report.md` entry.
 
 ### Acceptance Criteria
@@ -1464,6 +1537,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - Submission response shape is valid.
 - Runtime still accepts only `premises-NL` and `question`.
 - Competition constraints are documented.
+- E01-E14 contracts are test-covered, artifact-backed, and gate-verified.
 - No overfit/hardcode/label-leak shortcut is present.
 
 ### Required Tests or Validations
@@ -1471,6 +1545,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - Full unit test suite.
 - Local evaluation smoke run.
 - API smoke test with mocked or configured model endpoint.
+- Final incident-control artifact presence check.
 - Manual review of final acceptance criteria in `PLAN.md`.
 
 ### Explicit Non-Goals
@@ -1535,9 +1610,15 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] Both cache modes use single-flight locks.
 - [ ] Async evaluation supports bounded concurrency, retries, backoff, timeout handling, failed-sample continuation, and deterministic output ordering.
 - [ ] Parse-frame schema and AST schema support required logical/numeric constructs, metadata, variables/constants, deterministic compilation, and strict validation.
+- [ ] `frame_events.jsonl` includes raw response, normalized frame, validated frame, compiled AST, and rejected events.
+- [ ] Relation role/object/complement integrity is enforced; relation facts are never collapsed into lossy predicate-only forms.
+- [ ] Compiler is structural-only and performs no source-text semantic repair.
+- [ ] Canonicalization is lexical-only and forbids dataset/domain semantic alias maps.
+- [ ] `ambiguous` frames are emitted on unresolved uncertainty and are blocked from fact/rule/claim compilation.
 - [ ] LLM parser prompts are schema-grounded, numeric-aware, nested-premise-aware, and tested without reference-field leakage.
 - [ ] Bundle-local predicate/entity canonicalization preserves relation arguments and reduces avoidable `Unknown` outputs without record-specific maps.
 - [ ] Numeric layer tracks source provenance and inserts derived facts into proof trace.
+- [ ] Numeric strict-validation gates cover unit/dimension/range/div-zero/NaN/tolerance and write `numeric_validation_failures.jsonl`.
 - [ ] Horn prover supports tested safe contraposition.
 - [ ] Quantifier handling supports schema-level universal matching, bounded instantiation, and unsupported-case reporting.
 - [ ] Nested implications are routed to grounded Z3 encoding or explicit `solver_capability_gap`.
@@ -1551,6 +1632,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] Model configuration uses `.env` as source of truth and documents `SHOPAIKEY_MODEL` without exposing the API key.
 - [ ] Early live LLM connectivity smoke has passed or is documented as blocked with sanitized details.
 - [ ] Live parse-frame smoke has passed once the extractor exists, or is documented as blocked with sanitized details.
+- [ ] Parser replay fixtures from real failures are preserved as sanitized `parser_replay_*.jsonl`.
+- [ ] Root-cause attribution preserves earliest parser/schema/compiler failure and never overwrites it as `solver_capability_gap`.
 - [ ] Evaluation scripts score predictions only outside runtime.
 - [ ] NO DATA OVERFITTING: no record-specific tuning, answer leakage, gold-FOL leakage, or dataset-row shortcuts.
 - [ ] NO HARDCODING: no hardcoded answers, entity lists, predicate maps, numeric thresholds, or record-specific rule branches.
@@ -1563,17 +1646,17 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 - [x] Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
 - [x] Batch 2 - Cache Keys, Candidate Extraction, and Question Typing
-- [x] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
-- [x] Batch 4 - Debug Trace and Proof Trace Infrastructure
-- [x] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
-- [x] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
-- [x] Batch 7 - Numeric Layer with Source Provenance
-- [x] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
-- [x] Batch 8.5 - Numeric Layer Modularization and Maintainability
-- [x] Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
-- [x] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
-- [x] Batch 9.5 - Solver Citation Source-Text Enrichment
-- [x] Batch 9.6 - Proof Trace Explanation Readiness
+- [ ] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
+- [ ] Batch 4 - Debug Trace and Proof Trace Infrastructure
+- [ ] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
+- [ ] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
+- [ ] Batch 7 - Numeric Layer with Source Provenance
+- [ ] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
+- [ ] Batch 8.5 - Numeric Layer Modularization and Maintainability
+- [ ] Batch 8.6 - LLM Parser Prompt Hardening and Parser Smoke Coverage
+- [ ] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
+- [ ] Batch 9.5 - Solver Citation Source-Text Enrichment
+- [ ] Batch 9.6 - Proof Trace Explanation Readiness
 - [ ] Batch 9.7 - Parser/AST Canonicalization and Entailment Smoke Hardening
 - [ ] Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 - [ ] Batch 11 - API Endpoint
@@ -1584,17 +1667,17 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 - [x] M1 - Runtime-Safe Foundation
 - [x] M2 - Query Contract
-- [x] M3 - Logic Representation Contract
-- [x] M4 - Observability Foundation
-- [x] M5 - LLM Semantic Parser
-- [x] M6 - Async Runtime Skeleton
-- [x] M7 - Numeric Reasoning Layer
-- [x] M8 - Core Symbolic Reasoning
-- [x] M8.5 - Numeric Layer Maintainability
-- [x] M8.6 - LLM Parser Prompt Hardening
-- [x] M9 - Extended Verification
-- [x] M9.5 - Solver Citation Enrichment
-- [x] M9.6 - Proof Trace Explanation Readiness
+- [ ] M3 - Logic Representation Contract
+- [ ] M4 - Observability Foundation
+- [ ] M5 - LLM Semantic Parser
+- [ ] M6 - Async Runtime Skeleton
+- [ ] M7 - Numeric Reasoning Layer
+- [ ] M8 - Core Symbolic Reasoning
+- [ ] M8.5 - Numeric Layer Maintainability
+- [ ] M8.6 - LLM Parser Prompt Hardening
+- [ ] M9 - Extended Verification
+- [ ] M9.5 - Solver Citation Enrichment
+- [ ] M9.6 - Proof Trace Explanation Readiness
 - [ ] M9.7 - Parser/AST Canonicalization Hardening
 - [ ] M10 - Public Output Layer
 - [ ] M11 - Submission API
@@ -1622,130 +1705,140 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B2-T8
 - [x] B2-T9
 - [x] B2-T10
-- [x] B3-T1
-- [x] B3-T2
-- [x] B3-T3
-- [x] B3-T4
-- [x] B3-T5
-- [x] B3-T6
-- [x] B3-T7
-- [x] B3-T8
-- [x] B3-T9
-- [x] B3-T10
-- [x] B3-T11
-- [x] B4-T1
-- [x] B4-T2
-- [x] B4-T3
-- [x] B4-T4
-- [x] B4-T5
-- [x] B4-T6
-- [x] B4-T7
-- [x] B4-T8
-- [x] B4-T9
-- [x] B5-T1
-- [x] B5-T2
-- [x] B5-T3
-- [x] B5-T4
-- [x] B5-T5
-- [x] B5-T6
-- [x] B5-T7
-- [x] B5-T8
-- [x] B5-T9
-- [x] B5-T10
-- [x] B5-T11
-- [x] B5-T12
-- [x] B6-T1
-- [x] B6-T2
-- [x] B6-T3
-- [x] B6-T4
-- [x] B6-T5
-- [x] B6-T6
-- [x] B6-T7
-- [x] B6-T8
-- [x] B6-T9
-- [x] B6-T10
-- [x] B6-T11
-- [x] B7-T1
-- [x] B7-T2
-- [x] B7-T3
-- [x] B7-T4
-- [x] B7-T5
-- [x] B7-T6
-- [x] B7-T7
-- [x] B7-T8
-- [x] B7-T9
-- [x] B7-T10
-- [x] B7-T11
-- [x] B8-T1
-- [x] B8-T2
-- [x] B8-T3
-- [x] B8-T4
-- [x] B8-T5
-- [x] B8-T6
-- [x] B8-T7
-- [x] B8-T8
-- [x] B8-T9
-- [x] B8-T10
-- [x] B8-T11
-- [x] B8-T12
-- [x] B8-T13
-- [x] B8.5-T1
-- [x] B8.5-T2
-- [x] B8.5-T3
-- [x] B8.5-T4
-- [x] B8.5-T5
-- [x] B8.5-T6
-- [x] B8.5-T7
-- [x] B8.5-T8
-- [x] B8.5-T9
-- [x] B8.5-T10
-- [x] B8.6-T1
-- [x] B8.6-T2
-- [x] B8.6-T3
-- [x] B8.6-T4
-- [x] B8.6-T5
-- [x] B8.6-T6
-- [x] B8.6-T7
-- [x] B8.6-T8
-- [x] B8.6-T9
-- [x] B8.6-T10
-- [x] B9-T1
-- [x] B9-T2
-- [x] B9-T3
-- [x] B9-T4
-- [x] B9-T5
-- [x] B9-T6
-- [x] B9-T7
-- [x] B9-T8
-- [x] B9-T9
-- [x] B9-T10
-- [x] B9-T11
-- [x] B9.5-T1
-- [x] B9.5-T2
-- [x] B9.5-T3
-- [x] B9.5-T4
-- [x] B9.5-T5
-- [x] B9.5-T6
-- [x] B9.5-T7
-- [x] B9.5-T8
-- [x] B9.6-T1
-- [x] B9.6-T2
-- [x] B9.6-T3
-- [x] B9.6-T4
-- [x] B9.6-T5
-- [x] B9.6-T6
-- [x] B9.6-T7
-- [x] B9.6-T8
-- [x] B9.7-T1
-- [x] B9.7-T2
-- [x] B9.7-T3
-- [x] B9.7-T4
-- [x] B9.7-T5
-- [x] B9.7-T6
-- [x] B9.7-T7
-- [x] B9.7-T8
+- [ ] B3-T1
+- [ ] B3-T2
+- [ ] B3-T3
+- [ ] B3-T4
+- [ ] B3-T5
+- [ ] B3-T6
+- [ ] B3-T7
+- [ ] B3-T8
+- [ ] B3-T9
+- [ ] B3-T10
+- [ ] B3-T11
+- [ ] B3-T12
+- [ ] B3-T13
+- [ ] B4-T1
+- [ ] B4-T2
+- [ ] B4-T3
+- [ ] B4-T4
+- [ ] B4-T5
+- [ ] B4-T6
+- [ ] B4-T7
+- [ ] B4-T8
+- [ ] B4-T9
+- [ ] B4-T10
+- [ ] B4-T11
+- [ ] B5-T1
+- [ ] B5-T2
+- [ ] B5-T3
+- [ ] B5-T4
+- [ ] B5-T5
+- [ ] B5-T6
+- [ ] B5-T7
+- [ ] B5-T8
+- [ ] B5-T9
+- [ ] B5-T10
+- [ ] B5-T11
+- [ ] B5-T12
+- [ ] B5-T13
+- [ ] B6-T1
+- [ ] B6-T2
+- [ ] B6-T3
+- [ ] B6-T4
+- [ ] B6-T5
+- [ ] B6-T6
+- [ ] B6-T7
+- [ ] B6-T8
+- [ ] B6-T9
+- [ ] B6-T10
+- [ ] B6-T11
+- [ ] B7-T1
+- [ ] B7-T2
+- [ ] B7-T3
+- [ ] B7-T4
+- [ ] B7-T5
+- [ ] B7-T6
+- [ ] B7-T7
+- [ ] B7-T8
+- [ ] B7-T9
+- [ ] B7-T10
+- [ ] B7-T11
+- [ ] B7-T12
+- [ ] B7-T13
+- [ ] B8-T1
+- [ ] B8-T2
+- [ ] B8-T3
+- [ ] B8-T4
+- [ ] B8-T5
+- [ ] B8-T6
+- [ ] B8-T7
+- [ ] B8-T8
+- [ ] B8-T9
+- [ ] B8-T10
+- [ ] B8-T11
+- [ ] B8-T12
+- [ ] B8-T13
+- [ ] B8-T14
+- [ ] B8-T15
+- [ ] B8.5-T1
+- [ ] B8.5-T2
+- [ ] B8.5-T3
+- [ ] B8.5-T4
+- [ ] B8.5-T5
+- [ ] B8.5-T6
+- [ ] B8.5-T7
+- [ ] B8.5-T8
+- [ ] B8.5-T9
+- [ ] B8.5-T10
+- [ ] B8.6-T1
+- [ ] B8.6-T2
+- [ ] B8.6-T3
+- [ ] B8.6-T4
+- [ ] B8.6-T5
+- [ ] B8.6-T6
+- [ ] B8.6-T7
+- [ ] B8.6-T8
+- [ ] B8.6-T9
+- [ ] B8.6-T10
+- [ ] B9-T1
+- [ ] B9-T2
+- [ ] B9-T3
+- [ ] B9-T4
+- [ ] B9-T5
+- [ ] B9-T6
+- [ ] B9-T7
+- [ ] B9-T8
+- [ ] B9-T9
+- [ ] B9-T10
+- [ ] B9-T11
+- [ ] B9-T12
+- [ ] B9.5-T1
+- [ ] B9.5-T2
+- [ ] B9.5-T3
+- [ ] B9.5-T4
+- [ ] B9.5-T5
+- [ ] B9.5-T6
+- [ ] B9.5-T7
+- [ ] B9.5-T8
+- [ ] B9.6-T1
+- [ ] B9.6-T2
+- [ ] B9.6-T3
+- [ ] B9.6-T4
+- [ ] B9.6-T5
+- [ ] B9.6-T6
+- [ ] B9.6-T7
+- [ ] B9.6-T8
+- [ ] B9.7-T1
+- [ ] B9.7-T2
+- [ ] B9.7-T3
+- [ ] B9.7-T4
+- [ ] B9.7-T5
+- [ ] B9.7-T6
+- [ ] B9.7-T7
+- [ ] B9.7-T8
 - [ ] B9.7-T9
-- [x] B9.7-T10
+- [ ] B9.7-T10
 - [ ] B10-T1
 - [ ] B10-T2
 - [ ] B10-T3
@@ -1776,6 +1869,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] B12-T8
 - [ ] B12-T9
 - [ ] B12-T10
+- [ ] B12-T11
+- [ ] B12-T12
 - [ ] B13-T1
 - [ ] B13-T2
 - [ ] B13-T3
@@ -1787,6 +1882,9 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] B13-T9
 - [ ] B13-T10
 - [ ] B13-T11
+- [ ] B13-T12
+- [ ] B13-T13
+- [ ] B13-T14
 
 ## Completion Reporting Rules for Future AI Execution Agents
 

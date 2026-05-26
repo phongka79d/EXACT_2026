@@ -267,6 +267,13 @@ Common slot types:
 - `arithmetic_expression`
 - `entity_relation`
 
+Relation-contract rules:
+
+- `entity_relation` style content must preserve `subject`, `relation`, `object`, and optional `complement` roles.
+- Frames that lose object/complement roles must fail validation instead of compiling as lossy predicates.
+- Clause-side integrity is mandatory: `if` operands stay antecedent-side, `then` operands stay consequent-side.
+- If meaning cannot be preserved, the parser must emit `ambiguous`.
+
 Required metadata:
 
 - `source_id`
@@ -388,6 +395,8 @@ Rules:
 - Computed expressions should use `arithmetic_expression`.
 - Do not turn numeric requirements into generic predicates such as `meets_exam_requirement`.
 - Do not flatten expressions such as `75% of the standard score` into a bare number unless the deterministic numeric layer computes it.
+- Numeric validation must reject unit/dimension mismatch, invalid ranges, divide-by-zero, NaN/Inf, and out-of-policy tolerance cases.
+- Numeric path must not semantically repair meaning from source text; source text may supplement extraction only.
 
 Examples:
 
@@ -437,6 +446,8 @@ Compiler responsibilities:
 - Preserve implication direction.
 - Preserve explicit polarity/negation.
 - Record compiler warnings when a frame cannot be safely compiled.
+- Compiler is structural-only and must not use source text to guess semantics.
+- `ambiguous` frames must not compile into fact/rule/claim ASTs.
 
 AST root metadata is required:
 
@@ -511,6 +522,7 @@ Normalization should:
 - Preserve implication direction.
 - Preserve explicit classical negation.
 - Preserve all source metadata needed for proof trace citations.
+- Keep canonicalization lexical-only; do not apply static dataset/domain token-map aliases or broad semantic merges.
 
 Invalid frames or ASTs should be repaired only through the configured repair loop. If repair fails, record the stage-specific root cause and route to fallback only when allowed.
 
@@ -624,6 +636,10 @@ Recommended debug stages:
 - Root cause: category and sanitized message.
 - Final status: `ok`, `failed`, or `partial`.
 
+Attribution integrity rule:
+
+- Preserve earliest failure stage. Parser/frame/schema/compiler failures must not be re-labeled later as `solver_capability_gap`.
+
 Root-cause categories should include:
 
 - `candidate_extraction_error`
@@ -643,6 +659,13 @@ Root-cause categories should include:
 - `annotation_noise`
 - `timeout_error`
 - `api_error`
+
+Required artifacts:
+
+- `artifacts/frame_events.jsonl` for parser lifecycle events (`raw_response`, `normalized_frame`, `validated_frame`, `compiled_ast`, `rejected`).
+- `artifacts/parser_replay_*.jsonl` for sanitized replay of real parser failures.
+- `artifacts/numeric_validation_failures.jsonl` for strict numeric gate failures.
+- Sequencing rule: before extractor/live parser exists, artifacts may include only provided/mock-frame events (`normalized_frame`, `validated_frame`, `compiled_ast`, `rejected`); once extractor is active, every LLM parse attempt must include `raw_response`. If credentials/provider are blocked, record blocker/gate status and do not claim pass.
 
 ## 12.5 Maintainability Checkpoints
 
@@ -673,14 +696,15 @@ It must not be used as runtime input during evaluation or submission.
 7. Implement deterministic frame-to-AST compiler.
 8. Implement AST validation and normalization.
 9. Implement LLM parse-frame extractor, repair loop, and cache.
-10. Add async sample-level evaluation with bounded LLM concurrency.
-11. Add structured debug trace collection.
-12. Add numeric extraction and deterministic numeric evaluator.
-13. Implement Horn prover, safe contraposition, and bounded quantifier support.
-14. Refactor the numeric layer into maintainable focused modules without changing behavior.
-15. Add Z3 support for numeric constraints and grounded non-Horn/nested formulas.
-16. Add semantic fallback for low-confidence or unsupported cases.
-17. Add MCQ, Yes/No/Unknown, and best-effort open-ended answer logic.
-18. Generate proof-trace-based explanations.
-19. Add API endpoint and `.env` runtime config.
-20. Add evaluation scripts for accuracy, explanation grounding, cache stats, and root-cause categories.
+10. Run credential-gated live parser smoke/quality gate; if blocked, record blocker and do not claim pass.
+11. Add async sample-level evaluation with bounded LLM concurrency.
+12. Add structured debug trace collection.
+13. Add numeric extraction and deterministic numeric evaluator.
+14. Implement Horn prover, safe contraposition, and bounded quantifier support.
+15. Refactor the numeric layer into maintainable focused modules without changing behavior.
+16. Add Z3 support for numeric constraints and grounded non-Horn/nested formulas.
+17. Add semantic fallback for low-confidence or unsupported cases.
+18. Add MCQ, Yes/No/Unknown, and best-effort open-ended answer logic.
+19. Generate proof-trace-based explanations.
+20. Add API endpoint and `.env` runtime config.
+21. Add evaluation scripts for accuracy, explanation grounding, cache stats, and root-cause categories.

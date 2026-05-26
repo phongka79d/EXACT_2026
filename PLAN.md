@@ -1296,6 +1296,50 @@ Risks:
 
 - Z3 encoding becoming unsound if variables are not fully grounded.
 
+### Batch 9.7: Parser/AST Canonicalization and Entailment Smoke Hardening
+
+Goal: Reduce avoidable `Unknown` outputs caused by parser/AST predicate drift, entity drift, and lost relation arguments before public explanation formatting.
+
+Expected files/modules:
+
+- `app/logic/normalization`
+- `app/logic/compiler`
+- `app/logic/validation`
+- `app/llm/prompts.py` if prompt guidance needs to preserve relation arguments
+- `app/solver/horn` only for small canonicalized-AST consumption fixes
+- focused canonicalization/compiler tests
+
+Tasks:
+
+- Reproduce or inspect the recent two-record LLM smoke where every sample reached the solver but returned `Unknown`.
+- Audit LLM frames and compiled ASTs for entity mismatch, predicate mismatch, arity mismatch, generic class phrase mismatch, and subject/object loss.
+- Add bundle-local predicate/entity canonicalization derived only from the current runtime source text, validated frames, and compiled AST metadata.
+- Preserve meaningful subject and object arguments for relation-like facts so downstream Horn/quantifier reasoning can chain facts and rules.
+- Align singular/plural class phrases, named instances, and compatible role/domain phrases within the same premise bundle without a global dataset map.
+- Add synthetic tests for multi-step eligibility chains, generic project/code rule chains, predicate/entity aliasing, and subject/object preservation.
+- Add anti-overfit tests proving the behavior does not depend on record IDs, sample IDs, question IDs, option labels, gold answers, gold explanations, `idx`, or `premises-FOL`.
+- Rerun the live `.env` two-record smoke with bounded concurrency and report whether remaining `Unknown` answers are parser, compiler, solver, or provider issues.
+
+Validation commands:
+
+- focused canonicalization/compiler tests added in this batch
+- `python -m unittest tests/test_frame_compiler.py tests/test_logic_ast.py`
+- relevant Horn, quantifier, routing, and answer-decision tests
+- `python -m unittest`
+- live two-record LLM smoke through `scripts/evaluate_local.py` with `.env` and `--max-concurrency 2`
+
+Completion criteria:
+
+- Synthetic chain tests prove semantically equivalent premise/candidate phrasing can entail the expected claim without dataset-specific maps.
+- Relation-like facts preserve enough argument structure for downstream symbolic reasoning.
+- Canonicalization is bundle-local, deterministic, trace-visible, and source-cited.
+- The two-record LLM smoke no longer fails as all-`Unknown` solely because of parser/AST subject/object loss or predicate/entity drift; if provider instability or a deeper solver gap remains, the sanitized root cause is reported.
+
+Risks:
+
+- Over-broad aliasing can make the solver unsound. Canonicalization must be bundle-local, arity-aware, source-cited, and covered by negative tests.
+- Live provider variability can obscure parser improvements; mocked/synthetic tests must carry the deterministic acceptance criteria.
+
 ### Batch 10: Explanation Generation, Best-Effort Open-Ended Output, and MCQ Submission Adapter
 
 Goal: Produce concise, verifiable public outputs from proof traces.
@@ -1437,7 +1481,7 @@ Risks:
 
 - Premise cache key mismatch: use `record_id` only for local evaluation and normalized premise hash for API runtime; test both modes.
 - LLM frame parse errors: strict frame schema, repair prompts, deterministic frame-to-AST compiler, confidence penalties, fallback trace.
-- Predicate mismatch: per-premise-bundle predicate map, arity checks, phrase alias tracking.
+- Predicate/entity mismatch: per-premise-bundle predicate map, arity checks, phrase alias tracking, subject/object preservation, and negative tests against over-broad aliasing.
 - Unsafe contraposition: implement only literal-to-literal explicit-negation cases inside the Horn prover; test unsupported cases.
 - Nested implication gaps: encode only fully grounded finite formulas in Z3; otherwise return `solver_capability_gap`.
 - Quantifier complexity: use bounded instantiation over discovered constants; reject unbounded or alternating quantifier patterns.
@@ -1459,6 +1503,7 @@ Risks:
 - [ ] Both cache modes use single-flight locks.
 - [ ] Async evaluation supports bounded concurrency, retries, backoff, timeout handling, failed-sample continuation, and deterministic output ordering.
 - [ ] Parse-frame schema and AST schema support required logical/numeric constructs, metadata, variables/constants, deterministic compilation, and strict validation.
+- [ ] Bundle-local predicate/entity canonicalization preserves relation arguments and reduces avoidable `Unknown` outputs without record-specific maps.
 - [ ] Numeric layer tracks source provenance and inserts derived facts into proof trace.
 - [ ] Horn prover supports tested safe contraposition.
 - [ ] Quantifier handling supports schema-level universal matching, bounded instantiation, and reports unsupported cases.

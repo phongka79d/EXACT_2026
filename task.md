@@ -90,6 +90,8 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
   - Batch 9.5 complete. Solver proof steps preserve source text and citation metadata needed by public explanations.
 - M9.6 - Proof Trace Explanation Readiness
   - Batch 9.6 complete. Proof traces are explanation-ready before public output formatting and adapters.
+- M9.7 - Parser/AST Canonicalization Hardening
+  - Batch 9.7 not yet complete. Bundle-local parser/AST canonicalization has been hardened, but live provider-stable smoke acceptance is still pending.
 - M10 - Public Output Layer
   - Batch 10 complete. Proof-trace explanations, open-ended fallback, and MCQ submission adapter work.
 - M11 - Submission API
@@ -113,10 +115,11 @@ The LLM is the semantic parser, not the solver. It must emit compact parse frame
 10. Batch 8.6 -> Batch 9
 11. Batch 9 -> Batch 9.5
 12. Batch 9.5 -> Batch 9.6
-13. Batch 9.6 -> Batch 10
-14. Batch 10 -> Batch 11
-15. Batch 11 -> Batch 12
-16. Batch 12 -> Batch 13
+13. Batch 9.6 -> Batch 9.7
+14. Batch 9.7 -> Batch 10
+15. Batch 10 -> Batch 11
+16. Batch 11 -> Batch 12
+17. Batch 12 -> Batch 13
 
 ## Mandatory Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
 
@@ -1104,6 +1107,93 @@ Explanation quality is a scoring dimension. Before building the public output la
 - [x] Runtime safety tests pass.
 - [x] `report.md` contains Batch 9.6 result.
 
+## Mandatory Batch 9.7 - Parser/AST Canonicalization and Entailment Smoke Hardening
+
+### Goal
+
+Reduce avoidable `Unknown` outputs caused by LLM parse-frame drift, predicate/entity mismatch, and subject/object loss before public explanation formatting is built.
+
+### Why this batch exists
+
+Live two-record smoke after Batch 9.6 reached the solver but returned `Unknown` for every sample. The trace showed two root issues: semantically related phrases compiled into incompatible predicates/entities, and some factual relations lost their subject/object structure. Batch 10 is explicitly forbidden from changing solver truth values, so parser/AST canonicalization must be hardened before explanations and submission adapters are added.
+
+### Inputs / Dependencies
+
+- Batches 1-9.6 outputs.
+- Existing LLM parse-frame extractor, prompts, frame schema, compiler, AST validation, normalization, Horn solver, router, proof-trace readiness helpers, and debug traces.
+- `flow.md` sections on parse frames, frame-to-AST compilation, AST validation/normalization, solver routing, and debug trace root-cause reporting.
+- `PLAN.md` predicate mismatch mitigation: per-premise-bundle predicate map, arity checks, and phrase alias tracking.
+- Recent smoke artifacts may be used only as diagnostic evidence; runtime code must still use only `premises-NL` and `question`.
+
+### Exact Task List
+
+- B9.7-T1: Reproduce or inspect the current two-record LLM smoke traces and summarize the exact parser/AST root causes in `report.md`.
+- B9.7-T2: Audit premise and candidate frames after LLM extraction and deterministic compilation for entity drift, predicate drift, arity mismatch, generic class phrase mismatch, and subject/object loss.
+- B9.7-T3: Implement bundle-local predicate/entity canonicalization derived only from current runtime source text, validated frames, and compiled AST metadata.
+- B9.7-T4: Preserve source metadata while aligning singular/plural class phrases, named instances, and compatible role/domain phrases within the same premise bundle.
+- B9.7-T5: Harden frame compilation or normalization so relation-like facts keep their meaningful subject and object arguments instead of collapsing into argumentless or wrong-subject predicates.
+- B9.7-T6: Ensure Horn, bounded quantifier, safe contraposition, and router paths consume the canonicalized AST consistently without changing proof citations or source-text provenance.
+- B9.7-T7: Add synthetic, non-dataset-specific tests for multi-step educational eligibility chains, generic project/code rule chains, predicate/entity aliasing, and subject/object preservation.
+- B9.7-T8: Add anti-overfit tests proving canonicalization does not depend on `record_id`, `sample_id`, `question_id`, option label, gold answer, gold explanation, `idx`, or `premises-FOL`.
+- B9.7-T9: Run the live `.env` two-record LLM smoke with `--max-concurrency 2` after the fix, compare against the previous all-`Unknown` trace, and report whether remaining `Unknown` outputs are due to parser, compiler, solver capability, or provider instability.
+- B9.7-T10: Append Batch 9.7 execution details to `report.md`, including file-size notes and any remaining root-cause risks.
+
+### Files or Modules Likely Created or Updated
+
+- `app/logic/normalization/`
+- `app/logic/compiler/`
+- `app/logic/validation/`
+- `app/llm/prompts.py` if prompt guidance is needed to preserve relation arguments.
+- `app/solver/horn/` only if canonicalized AST consumption needs a small compatibility fix.
+- `app/pipeline/runtime.py` only if trace metadata must expose canonicalization diagnostics.
+- `tests/test_logic_ast.py`
+- `tests/test_frame_compiler.py`
+- Optional focused canonicalization tests.
+- `report.md`
+- `task.md`
+
+### Required Outputs / Artifacts
+
+- Bundle-local predicate/entity canonicalization or alias-map behavior.
+- Subject/object preserving compilation or normalization for relation-like facts.
+- Trace-visible canonicalization diagnostics or warnings when alignment is applied or rejected.
+- Regression tests for chain entailment, aliasing, subject/object preservation, and anti-overfit boundaries.
+- Updated two-record smoke artifacts or a documented provider blocker.
+- Batch 9.7 report entry.
+
+### Acceptance Criteria
+
+- Synthetic chain tests prove that semantically equivalent premise/candidate phrasing can entail the expected claim without using dataset-specific mappings.
+- Relation-like facts preserve enough argument structure for downstream Horn/quantifier reasoning.
+- Canonicalization is bundle-local, deterministic, trace-visible, and source-cited.
+- No runtime path reads or depends on `premises-FOL`, `answer`, `explanation`, `idx`, record IDs, sample IDs, question IDs, or option labels for entailment.
+- The two-record LLM smoke no longer fails as all-`Unknown` solely because of parser/AST subject/object loss or predicate/entity drift; if provider instability or a deeper solver gap remains, the exact sanitized root cause is reported.
+
+### Required Tests or Validations
+
+- Focused canonicalization/compiler tests added in this batch.
+- `python -m unittest tests/test_frame_compiler.py tests/test_logic_ast.py`
+- Relevant solver tests, especially Horn, quantifier, routing, and answer decision tests.
+- `python -m unittest`
+- Live smoke using `scripts/evaluate_local.py` on the existing two-record smoke input with `.env`, `--max-concurrency 2`, bounded timeouts, and sanitized artifacts.
+
+### Explicit Non-Goals
+
+- Do not hardcode dataset record IDs, sample IDs, answer labels, entities, predicates, gold explanations, gold FOL strings, or observed correct answers.
+- Do not use `premises-FOL`, `answer`, `explanation`, or `idx` in runtime prompts, compiler inputs, solver inputs, traces, or predictions.
+- Do not make the LLM produce final answers or full formal ASTs.
+- Do not change public explanation formatting, API behavior, scoring scripts, or official MCQ forced-choice policy.
+- Do not weaken solver soundness to avoid `Unknown`; unsupported cases must still report `solver_capability_gap`.
+
+### Completion Checklist
+
+- [x] Parser/AST root cause from the all-`Unknown` smoke is documented.
+- [x] Bundle-local canonicalization exists and is tested.
+- [x] Relation subject/object preservation is tested.
+- [x] Anti-overfit/leakage tests pass.
+- [x] Two-record live LLM smoke is rerun and reported.
+- [x] `report.md` contains Batch 9.7 result.
+
 ## Mandatory Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 
 ### Goal
@@ -1116,7 +1206,7 @@ The competition requires `answer` and `explanation`. These outputs must be groun
 
 ### Inputs / Dependencies
 
-- Batches 1-9.6 outputs.
+- Batches 1-9.7 outputs.
 - `PLAN.md` output and MCQ policy sections.
 - `flow.md` sections 10 and 11.
 
@@ -1429,7 +1519,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - Batch 8.6 -> Batch 9: hardened parser prompts before Z3/fallback extensions rely on parsed numeric and logic structure.
 - Batch 9 -> Batch 9.5: complete solver routes before enriching route-specific source-text citations.
 - Batch 9.5 -> Batch 9.6: source-text citations before building explanation-ready proof-trace views.
-- Batch 9.6 -> Batch 10: explanation-ready proof traces before public explanations and adapters.
+- Batch 9.6 -> Batch 9.7: explanation-ready traces expose enough root-cause detail to harden parser/AST canonicalization before output formatting.
+- Batch 9.7 -> Batch 10: canonicalized parser/AST handoff reduces avoidable `Unknown` answers before public explanations and adapters.
 - Batch 10 -> Batch 11: output formatter before API endpoint.
 - Batch 11 -> Batch 12: API/runtime path before local evaluation and scoring.
 - Batch 12 -> Batch 13: evaluation loop before final hardening.
@@ -1445,6 +1536,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [ ] Async evaluation supports bounded concurrency, retries, backoff, timeout handling, failed-sample continuation, and deterministic output ordering.
 - [ ] Parse-frame schema and AST schema support required logical/numeric constructs, metadata, variables/constants, deterministic compilation, and strict validation.
 - [ ] LLM parser prompts are schema-grounded, numeric-aware, nested-premise-aware, and tested without reference-field leakage.
+- [ ] Bundle-local predicate/entity canonicalization preserves relation arguments and reduces avoidable `Unknown` outputs without record-specific maps.
 - [ ] Numeric layer tracks source provenance and inserts derived facts into proof trace.
 - [ ] Horn prover supports tested safe contraposition.
 - [ ] Quantifier handling supports schema-level universal matching, bounded instantiation, and unsupported-case reporting.
@@ -1482,6 +1574,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 9 - Z3 Adapter, Nested Implication Routing, and Semantic Fallback
 - [x] Batch 9.5 - Solver Citation Source-Text Enrichment
 - [x] Batch 9.6 - Proof Trace Explanation Readiness
+- [ ] Batch 9.7 - Parser/AST Canonicalization and Entailment Smoke Hardening
 - [ ] Batch 10 - Explanation Generation, Open-Ended Output, and MCQ Submission Adapter
 - [ ] Batch 11 - API Endpoint
 - [ ] Batch 12 - Evaluation, Scoring, and Error Analysis
@@ -1502,6 +1595,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] M9 - Extended Verification
 - [x] M9.5 - Solver Citation Enrichment
 - [x] M9.6 - Proof Trace Explanation Readiness
+- [ ] M9.7 - Parser/AST Canonicalization Hardening
 - [ ] M10 - Public Output Layer
 - [ ] M11 - Submission API
 - [ ] M12 - Evaluation Loop
@@ -1642,6 +1736,16 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B9.6-T6
 - [x] B9.6-T7
 - [x] B9.6-T8
+- [x] B9.7-T1
+- [x] B9.7-T2
+- [x] B9.7-T3
+- [x] B9.7-T4
+- [x] B9.7-T5
+- [x] B9.7-T6
+- [x] B9.7-T7
+- [x] B9.7-T8
+- [ ] B9.7-T9
+- [x] B9.7-T10
 - [ ] B10-T1
 - [ ] B10-T2
 - [ ] B10-T3

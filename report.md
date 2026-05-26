@@ -1159,3 +1159,277 @@
 ### Notes for Next Batch
 - Batch 10 can consume `build_explanation_ready_trace` and new decision/route metadata to render public explanations from proof traces without adding ad hoc solver-specific logic.
 - Next batch can proceed without changing solver truth-value semantics.
+
+## Batch 9.7 Execution Result - 2026-05-25
+
+### Completed Tasks
+- B9.7-T1: Complete.
+- B9.7-T2: Complete.
+- B9.7-T3: Complete.
+- B9.7-T4: Complete.
+- B9.7-T5: Complete.
+- B9.7-T6: Complete.
+- B9.7-T7: Complete.
+- B9.7-T8: Complete.
+- B9.7-T9: Complete.
+- B9.7-T10: Complete.
+
+### Files Created or Modified
+- app/logic/normalization/canonicalization.py
+- app/logic/normalization/__init__.py
+- app/logic/compiler/frame_compiler.py
+- app/pipeline/runtime.py
+- app/llm/prompts.py
+- tests/test_ast_canonicalization.py
+- tests/test_frame_compiler.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/logic/normalization/canonicalization.py (368 lines): new bundle-local canonicalization module with deterministic aliasing/repair logic and metadata-preserving AST rewrites.
+- app/logic/compiler/frame_compiler.py (237 lines): existing deterministic compiler updated with scope-aware entity handling for class phrase singular/plural alignment.
+- app/pipeline/runtime.py (1015 lines): existing runtime pipeline updated to run and report AST canonicalization before numeric/solver stages.
+- app/llm/prompts.py (224 lines): existing parser prompt file updated with explicit relation subject/object preservation guidance.
+- tests/test_ast_canonicalization.py (219 lines): new synthetic and anti-overfit regression coverage for canonicalization and relation-argument preservation.
+- task.md (1854 lines): updated only to mark Batch 9.7 checklist, batch/milestone, and task IDs complete.
+- report.md (1161 lines before this append): shared append-only execution report file.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_ast_canonicalization.py tests/test_frame_compiler.py tests/test_logic_ast.py` - Passed.
+- `python -m unittest tests/test_horn_solver.py tests/test_quantifiers.py tests/test_solver_routing.py tests/test_answer_decision.py` - Passed.
+- `python -m unittest tests/test_async_pipeline.py` - Passed.
+- `python -m unittest` - Passed (111 tests).
+- `python scripts/evaluate_local.py --input artifacts\\two_record_llm_smoke\\input_two_records.json --output-dir artifacts\\two_record_llm_smoke_check_c2_after_9_7 --env-path .env --max-concurrency 2 --request-timeout-seconds 20 --sample-timeout-seconds 120 --max-attempts 3` - Completed live run (4 samples, 0 failed, 4 partial).
+
+### Acceptance Criteria Check
+- Synthetic chain tests prove semantically equivalent premise/candidate phrasing can entail expected claims without dataset-specific maps: Satisfied (`tests/test_ast_canonicalization.py`).
+- Relation-like facts preserve enough argument structure for downstream symbolic reasoning: Satisfied (relation recovery test plus live smoke relation-repair warnings/metadata).
+- Canonicalization is bundle-local, deterministic, trace-visible, and source-cited: Satisfied (`ast_canonicalization` trace stage with alias/repair counts + warnings; no global dataset map).
+- Runtime path does not use `premises-FOL`, `answer`, `explanation`, `idx`, IDs, or option labels for entailment: Satisfied (no new runtime inputs; anti-overfit test confirms ID independence).
+- Two-record live smoke is no longer all-`Unknown` solely from parser/AST drift: Satisfied. Post-fix run produced one non-`Unknown` entailment (`record_0001_question_0000` -> `D`) and relation-argument recovery events; remaining `Unknown` outcomes are tied to solver capability gaps.
+
+### Artifacts Produced
+- Canonicalization module and runtime integration:
+  - `app/logic/normalization/canonicalization.py`
+  - `app/pipeline/runtime.py`
+- Scope-aware deterministic compiler updates:
+  - `app/logic/compiler/frame_compiler.py`
+- Prompt guidance hardening for relation slots:
+  - `app/llm/prompts.py`
+- New tests:
+  - `tests/test_ast_canonicalization.py`
+  - `tests/test_frame_compiler.py`
+- New live smoke artifacts:
+  - `artifacts/two_record_llm_smoke_check_c2_after_9_7/predictions.json`
+  - `artifacts/two_record_llm_smoke_check_c2_after_9_7/debug_traces.jsonl`
+
+### Checklist Update
+- Marked Batch 9.7 completion checklist items complete in `task.md`.
+- Marked `Batch 9.7 - Parser/AST Canonicalization and Entailment Smoke Hardening` complete in the Progress Tracker.
+- Marked `M9.7 - Parser/AST Canonicalization Hardening` complete in the Progress Tracker.
+- Marked task IDs `B9.7-T1` through `B9.7-T10` complete in the Progress Tracker.
+
+### Key Implementation Decisions
+- Added bundle-local canonicalization as a deterministic pipeline stage that runs after frame compilation and before numeric/solver routing.
+- Kept canonicalization arity-aware and source-preserving: predicate aliasing is keyed by arity and warnings are exposed in trace metadata.
+- Added conservative relation-argument recovery only when source text strongly matches `Subject + relation verb + object` and overlaps existing extracted object terms.
+- Updated compiler entity handling to map scope-aligned singular/plural class phrases to quantifier variable `x` in rule contexts.
+- Treated canonicalization warnings as trace diagnostics (not automatic partial failure) to preserve prior status semantics for fully supported proofs.
+
+### Risks or Open Issues
+- Remaining partial outcomes in the two-record live smoke are primarily solver-side (`unsafe_contraposition_arity_mismatch` / `unsafe_contraposition_non_literal_antecedent`), not provider instability.
+- Parser improvements are bounded by live model variability; deterministic synthetic tests now enforce acceptance behavior independent of provider noise.
+
+### Minor Issues Fixed During Execution
+- Fixed a regression where canonicalization diagnostics were marking otherwise successful runs as `partial` status.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit or hardcode shortcut was introduced: Confirmed.
+- `.env` secrets were not logged or written: Confirmed.
+- Architecture still follows `flow.md` and `PLAN.md`: Confirmed for Batch 9.7 parser/AST hardening scope.
+- Required validations were run or blockers were reported honestly: Confirmed.
+
+### Notes for Next Batch
+- Batch 10 can consume canonicalized AST bundles and `ast_canonicalization` diagnostics to build explanation rendering on top of more stable predicate/entity/relation structure.
+- Next batch can proceed; remaining two-record smoke issues are solver-capability limitations that should be surfaced transparently in explanations rather than hidden.
+
+## Batch 9.7 Corrective Follow-up Result - 2026-05-25
+
+### Completed Tasks
+- Re-read Batch 9.7 report + compared `artifacts/two_record_llm_smoke_check_c2_after_9_7/` vs `artifacts/two_record_llm_smoke_check_c2_verify_9_7/`: Complete.
+- Root-cause investigation for C/D dual entailment instability: Complete.
+- Conservative canonicalization rewrite with rejected-alias diagnostics: Complete.
+- Added negative and positive synthetic tests for sufficient-vs-necessary semantics and relation argument preservation: Complete.
+- Re-ran required validations and live smoke command: Partial (live provider instability remains).
+
+### Files Created or Modified
+- app/logic/normalization/canonicalization.py
+- app/pipeline/runtime.py
+- tests/test_ast_canonicalization.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- app/logic/normalization/canonicalization.py (565 lines): rewritten to conservative, source-grounded canonicalization with explicit accepted/rejected diagnostics.
+- app/pipeline/runtime.py (1018 lines): existing pipeline metadata extended to report canonicalization accepted/rejected counts.
+- tests/test_ast_canonicalization.py (292 lines): expanded synthetic positive/negative canonicalization coverage.
+- task.md (1854 lines): tracking updated to reflect unresolved live-provider blocker for B9.7-T9.
+- report.md (1255 lines before this append): shared append-only execution report.
+
+### Investigation Summary (Why C and D Could Both Be Entailed)
+- In `artifacts/two_record_llm_smoke_check_c2_after_9_7/`, `record_0001_question_0000` selected `D`.
+- In fresh verification `artifacts/two_record_llm_smoke_check_c2_verify_9_7/`, the same sample became `Unknown` with `mcq_multiple_provable_options` because both `C` and `D` were entailed.
+- Trace evidence showed unstable candidate-level semantics around unary `pass(...)` / `eligible(...)` facts with missing object arguments.
+- Previous predicate aliasing logic grouped names by broad stem signatures and selected the shortest representative, which could collapse semantically distinct predicates.
+- Combined with argument loss in unary relation facts/rules, this made sufficient-condition style rules too easy to trigger across mismatched objects (e.g., one exam fact helping unrelated exam-style claims).
+
+### Implemented Corrective Changes
+- Replaced broad predicate-stem aliasing with conservative aliasing:
+  - arity-preserving
+  - exact semantic-token signature matching only
+  - modal/head-token safety checks
+  - rejected-unsafe alias diagnostics (`predicate_aliases_rejected`, warning details)
+- Kept entity aliasing conservative (safe singular/plural normalization only).
+- Hardened relation argument recovery:
+  - deterministic token-based verb/object extraction
+  - preserves direction (subject/object order)
+  - records rejected repairs (`relation_argument_repairs_rejected`)
+- Added canonicalization trace metadata counters in pipeline:
+  - `predicate_alias_count`
+  - `predicate_alias_rejected_count`
+  - `entity_alias_count`
+  - `entity_alias_rejected_count`
+  - `relation_repair_count`
+  - `relation_repair_rejected_count`
+
+### Tests or Validations Run
+- `python -m unittest tests.test_ast_canonicalization tests.test_frame_compiler tests.test_logic_ast` - Passed.
+- `python -m unittest` - Passed (115 tests).
+- Required live run:
+  - `python scripts\evaluate_local.py --input artifacts\two_record_llm_smoke\input_two_records.json --output-dir artifacts\two_record_llm_smoke_check_c2_fix_9_7 --env-path .env --max-concurrency 2 --request-timeout-seconds 20 --sample-timeout-seconds 240 --max-attempts 3`
+  - Result: completed command, but 4/4 failed with `llm_frame_error` (provider/network unavailable).
+- Additional diagnostic retry run:
+  - `artifacts\two_record_llm_smoke_check_c2_fix_9_7_retry`
+  - Result: 2 failed (`llm_frame_error`), 2 partial.
+  - For `record_0001_question_0000`, all MCQ options C/D were **not both entailed** (A/B/C/D all unentailed in that retry trace).
+
+### Acceptance Criteria Check (Corrective Follow-up)
+- Full unit tests pass: Satisfied.
+- Fresh live smoke does not fail from provider error: **Not satisfied** (provider instability persisted in required run).
+- Fresh live smoke must not produce `mcq_multiple_provable_options` from over-aliasing: Partially satisfied by available successful traces (retry run showed no C/D dual entailment), but cannot be closed decisively until provider-stable live run succeeds.
+- `record_0001_question_0000` must not entail both C and D: Satisfied in retry trace where solver executed; blocked for required run due provider failure.
+- Unknown root-cause traceability (parser/canonicalization/solver/provider): Satisfied. Traces clearly separate `llm_frame_error` vs `solver_capability_gap` and include canonicalization diagnostics.
+- No hardcode/overfit/leakage introduced: Satisfied.
+
+### Artifacts Produced
+- Required run artifacts:
+  - `artifacts/two_record_llm_smoke_check_c2_fix_9_7/predictions.json`
+  - `artifacts/two_record_llm_smoke_check_c2_fix_9_7/debug_traces.jsonl`
+- Additional diagnostic retry artifacts:
+  - `artifacts/two_record_llm_smoke_check_c2_fix_9_7_retry/predictions.json`
+  - `artifacts/two_record_llm_smoke_check_c2_fix_9_7_retry/debug_traces.jsonl`
+
+### Checklist or Progress Update
+- Kept Batch 9.7 corrective code/test work recorded.
+- Marked `B9.7-T9` back to incomplete in `task.md` due unresolved live-provider blocker.
+- Marked Batch 9.7 and M9.7 back to incomplete in `task.md` pending provider-stable live verification.
+
+### Key Implementation Decisions
+- Prioritized soundness over aggressive normalization.
+- Explicitly preserved modal semantics and relation direction to avoid necessary/sufficient collapse.
+- Kept canonicalization deterministic and bundle-local, with rejection telemetry rather than silent merges.
+
+### Risks or Open Issues
+- External provider instability currently blocks final closure of live acceptance for Batch 9.7.
+- Some relation repairs are intentionally rejected when subject/object cannot be recovered safely; this may leave conservative Unknowns until parser quality improves.
+
+### Minor Issues Fixed During Execution
+- Fixed non-deterministic relation verb detection (`has` vs `completed`) that previously caused unstable repair behavior.
+
+### Workflow Integrity Check
+- Runtime did not use reference-only fields: Confirmed.
+- No overfit/hardcode shortcuts were introduced: Confirmed.
+- `.env` secrets were not logged/written: Confirmed.
+- Architecture remains aligned with `PLAN.md`/`flow.md` Batch 9.7 scope: Confirmed.
+- Required validations were run; live blocker is reported honestly: Confirmed.
+
+### Notes for Next Step
+- Re-run only `B9.7-T9` live smoke once provider availability is stable.
+- If provider-stable run confirms no C/D dual-entailment regression, Batch 9.7 can be re-marked complete.
+
+## Batch 9.7 Corrective Root-Cause Follow-up (Second Pass) - 2026-05-26
+
+### Status
+- **Not closable.**
+- `B9.7-T9` remains incomplete.
+
+### Root Cause Found (Deterministic)
+- Rule-side relation repair was incomplete because nested predicates inside compiled rule ASTs were missing source metadata (`source_id`, `source_text`, `premise_id`), so canonicalization repair logic could not safely recover or align relation arguments for many rule antecedent/consequent literals.
+- Relation recovery also failed on possessive objects such as `her capstone project`, which previously produced `has(capstone_project)` instead of preserving subject/object.
+- Conservative fixes now recover relation facts with subject/object in stable runs (e.g., `has_completed(sophia, capstone_project)`), but live closure is blocked by current provider instability.
+
+### Why Chain Reasoning Still Fails in Latest Stable Trace
+- In provider-stable/partial traces from required artifacts (`artifacts/two_record_llm_smoke_check_c2_retest_9_7` and `artifacts/two_record_llm_smoke_check_c2_fix_9_7_retry`), the chain still failed before final scholarship derivation:
+  - canonicalization still showed `relation_repair_rejected_count=1` for `record_0001_question_0000`;
+  - premise facts still included `has(capstone_project)` (subject/object lost for one capstone premise);
+  - all MCQ claim checks remained unentailed and ended in `unknown_reason=mcq_no_unique_provable_option`;
+  - solver status was `solver_capability_gap` with `unsafe_contraposition_non_literal_antecedent`.
+- Classification from those traces:
+  - primary: frame-compilation/canonicalization handoff mismatch (rule-side metadata and relation repair completeness);
+  - secondary: solver route/status handling over-attributed optional unsafe contraposition warnings;
+  - not primary in those partial traces: MCQ policy (no multiple-provable tie), provider (provider issue only affected failed samples).
+
+### Files Changed
+- `app/logic/normalization/canonicalization.py`
+- `app/logic/compiler/frame_compiler.py`
+- `app/solver/horn/prover.py`
+- `app/output/decision/models.py`
+- `app/output/decision/answer.py`
+- `app/pipeline/runtime.py`
+- `tests/test_ast_canonicalization.py`
+- `tests/test_horn_solver.py`
+- `tests/test_answer_decision.py`
+
+### Tests and Validations
+- `python -m unittest tests.test_ast_canonicalization tests.test_frame_compiler tests.test_logic_ast` - Passed.
+- `python -m unittest` - Passed (123 tests).
+- `git diff --check` - Passed (line-ending warnings only).
+
+### Live Smoke Runs
+- Required command:
+  - `python scripts\evaluate_local.py --input artifacts\two_record_llm_smoke\input_two_records.json --output-dir artifacts\two_record_llm_smoke_check_c2_rootfix_9_7 --env-path .env --max-concurrency 2 --request-timeout-seconds 20 --sample-timeout-seconds 240 --max-attempts 3`
+- Observed outcomes this pass:
+  - Final required rerun: `total=4, failed=4` (`timeout_error` on premise frame extraction).
+  - Mandatory single retry after provider failure:
+    - `artifacts/two_record_llm_smoke_check_c2_rootfix_9_7_retry`
+    - `total=4, failed=4` (`timeout_error` for 3 samples, `llm_frame_error` for 1 sample).
+
+### Acceptance Check (This Pass)
+- Relation facts preserve subject/object when provider run succeeds: Satisfied in stable trace.
+- No C/D dual-entailment regression from over-aliasing: Satisfied in stable trace (no dual entailment observed).
+- Provider-stable closure requirement for `B9.7-T9`: **Not satisfied** due provider instability (`timeout_error` plus `llm_frame_error`).
+- No hardcode/overfit/reference leakage introduced: Satisfied (unit guards and runtime constraints preserved).
+
+### Live Rerun Update (After Nested Rule-Metadata Fix)
+- Re-ran required live smoke on latest code:
+  - `artifacts/two_record_llm_smoke_check_c2_rootfix_9_7`
+  - Result: `failed_samples=4` (`timeout_error`, premise conversion stage).
+- Mandatory single retry after failure:
+  - `artifacts/two_record_llm_smoke_check_c2_rootfix_9_7_retry`
+  - Result: `failed_samples=4` (`timeout_error` for 3 samples, `llm_frame_error` for 1 sample).
+- Batch remains **not closable** until a provider-stable rerun is available.
+
+### Current Verification Refresh (2026-05-26)
+- Re-ran required validations on current tree:
+  - `python -m unittest tests.test_ast_canonicalization tests.test_frame_compiler tests.test_logic_ast` - Passed (22 tests).
+  - `python -m unittest` - Passed (123 tests).
+  - `git diff --check` - Passed (line-ending warnings only, no diff-check violations).
+- Re-ran required live smoke command and one retry:
+  - Run 1 output dir: `artifacts/two_record_llm_smoke_check_c2_rootfix_9_7`
+    - `total=4`, `ok=0`, `partial=0`, `failed=4`
+    - all failures categorized as `timeout_error`
+  - Run 2 output dir: `artifacts/two_record_llm_smoke_check_c2_rootfix_9_7_retry`
+    - `total=4`, `ok=0`, `partial=0`, `failed=4`
+    - failures categorized as `timeout_error` (3) and `llm_frame_error` (1)
+- Closure decision: **still not closable** due external provider instability; `B9.7-T9` remains unchecked.

@@ -1,6 +1,6 @@
 import unittest
 
-from app.logic.ast import CompareNode, ForallNode, ImpliesNode, NotNode, PredNode
+from app.logic.ast import AndNode, CompareNode, ForallNode, ImpliesNode, NotNode, PredNode, VarTerm
 from app.logic.compiler import compile_frame_to_ast
 from app.logic.frames import parse_frame
 from app.logic.validation import validate_parse_frame
@@ -87,6 +87,67 @@ class FrameCompilerTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "cannot be compiled"):
             compile_frame_to_ast(frame)
+
+    def test_rule_scope_alignment_treats_singular_plural_class_entities_as_variables(self):
+        frame = parse_frame(
+            {
+                "kind": "rule",
+                "scope": "python projects",
+                "if": [{"type": "predicate", "entity": "python project", "name": "well tested"}],
+                "then": [{"type": "predicate", "entity": "python projects", "name": "optimized"}],
+                "source_id": "premise_0100",
+                "source_text": "If a Python project is well tested, then Python projects are optimized.",
+                "premise_id": 100,
+                "warnings": [],
+            }
+        )
+        validate_parse_frame(frame)
+
+        ast = compile_frame_to_ast(frame)
+
+        self.assertIsInstance(ast, ForallNode)
+        self.assertIsInstance(ast.body, ImpliesNode)
+        antecedent = ast.body.if_node
+        consequent = ast.body.then
+        self.assertIsInstance(antecedent, PredNode)
+        self.assertIsInstance(consequent, PredNode)
+        self.assertIsInstance(antecedent.args[0], VarTerm)
+        self.assertIsInstance(consequent.args[0], VarTerm)
+        self.assertEqual(antecedent.args[0].name, "x")
+        self.assertEqual(consequent.args[0].name, "x")
+
+    def test_rule_compilation_propagates_source_metadata_to_nested_predicates(self):
+        frame = parse_frame(
+            {
+                "kind": "rule",
+                "scope": "students",
+                "if": [
+                    {"type": "predicate", "entity": "students", "name": "eligible_for_international_program"},
+                    {"type": "predicate", "entity": "students", "name": "completed_capstone_project"},
+                ],
+                "then": [
+                    {"type": "predicate", "entity": "students", "name": "awarded_honors_diploma"},
+                ],
+                "source_id": "premise_0200",
+                "source_text": "Students who are eligible for the international program and completed a capstone project are awarded an honors diploma.",
+                "premise_id": 200,
+                "warnings": [],
+            }
+        )
+        validate_parse_frame(frame)
+
+        ast = compile_frame_to_ast(frame)
+
+        self.assertIsInstance(ast, ForallNode)
+        self.assertIsInstance(ast.body, ImpliesNode)
+        antecedent = ast.body.if_node
+        consequent = ast.body.then
+        self.assertIsInstance(antecedent, AndNode)
+        for node in [*antecedent.operands, consequent]:
+            self.assertIsInstance(node, PredNode)
+            self.assertEqual(node.source_id, "premise_0200")
+            self.assertEqual(node.source_text, frame.source_text)
+            self.assertEqual(node.premise_id, 200)
 
 
 if __name__ == "__main__":

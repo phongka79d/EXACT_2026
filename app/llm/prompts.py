@@ -102,6 +102,7 @@ def _system_instruction() -> str:
         "Nested/compound guidance:\n"
         "- Preserve implication direction and condition/consequence roles.\n"
         "- Do not reverse or merge directional clauses.\n"
+        "- When text contains relation structure (for example, `X has completed Y`, `X received Y`, or `X needs Y`), prefer `entity_relation` with explicit `subject` and `object` over collapsing to a unary predicate.\n"
         "- If one safe frame cannot preserve meaning, emit `compound` or `ambiguous` with warnings."
     )
 

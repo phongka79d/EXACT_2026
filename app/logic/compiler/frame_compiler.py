@@ -42,7 +42,7 @@ def compile_frame_to_ast(frame: ParseFrame) -> LogicNode:
 
     if isinstance(frame, ClaimFrame):
         node = _compile_slot(frame.claim)
-        return _with_metadata(
+        return _with_metadata_recursive(
             node,
             source_id=frame.source_id,
             source_text=frame.source_text,
@@ -50,9 +50,18 @@ def compile_frame_to_ast(frame: ParseFrame) -> LogicNode:
         )
 
     if isinstance(frame, CompoundFrame):
-        parts = [_compile_slot(slot) for slot in frame.parts]
+        parts = [
+            _with_metadata_recursive(
+                _compile_slot(slot),
+                source_id=frame.source_id,
+                source_text=frame.source_text,
+                premise_id=frame.premise_id,
+                candidate_label=frame.candidate_label,
+            )
+            for slot in frame.parts
+        ]
         combined = _join_nodes(frame.operator, parts)
-        return _with_metadata(
+        return _with_metadata_recursive(
             combined,
             source_id=frame.source_id,
             source_text=frame.source_text,
@@ -61,17 +70,48 @@ def compile_frame_to_ast(frame: ParseFrame) -> LogicNode:
         )
 
     if isinstance(frame, FactFrame):
-        compiled = [_compile_slot(slot, frame_entity=frame.entity) for slot in frame.facts]
+        compiled = [
+            _with_metadata_recursive(
+                _compile_slot(slot, frame_entity=frame.entity),
+                source_id=frame.source_id,
+                source_text=frame.source_text,
+                premise_id=frame.premise_id,
+            )
+            for slot in frame.facts
+        ]
         combined = _join_nodes("and", compiled)
-        return _with_metadata(
+        return _with_metadata_recursive(
             combined,
             source_id=frame.source_id,
             source_text=frame.source_text,
             premise_id=frame.premise_id,
         )
 
-    antecedent = _join_nodes("and", [_compile_slot(slot) for slot in frame.if_slots])
-    consequent = _join_nodes("and", [_compile_slot(slot) for slot in frame.then_slots])
+    scope_signature = _phrase_signature(frame.scope)
+    antecedent = _join_nodes(
+        "and",
+        [
+            _with_metadata_recursive(
+                _compile_slot(slot, scope_signature=scope_signature),
+                source_id=frame.source_id,
+                source_text=frame.source_text,
+                premise_id=frame.premise_id,
+            )
+            for slot in frame.if_slots
+        ],
+    )
+    consequent = _join_nodes(
+        "and",
+        [
+            _with_metadata_recursive(
+                _compile_slot(slot, scope_signature=scope_signature),
+                source_id=frame.source_id,
+                source_text=frame.source_text,
+                premise_id=frame.premise_id,
+            )
+            for slot in frame.then_slots
+        ],
+    )
     implication = ImpliesNode(type="implies", if_node=antecedent, then=consequent)
     variable = _scope_to_quantified_var(frame.scope)
     return ForallNode(
@@ -84,39 +124,57 @@ def compile_frame_to_ast(frame: ParseFrame) -> LogicNode:
     )
 
 
-def _compile_slot(slot: FrameSlot, *, frame_entity: str | None = None) -> LogicNode:
+def _compile_slot(
+    slot: FrameSlot,
+    *,
+    frame_entity: str | None = None,
+    scope_signature: str | None = None,
+) -> LogicNode:
     if isinstance(slot, PredicateSlot):
-        return _compile_predicate_slot(slot)
+        return _compile_predicate_slot(slot, scope_signature=scope_signature)
     if isinstance(slot, NumericConditionSlot):
-        return _compile_numeric_condition_slot(slot)
+        return _compile_numeric_condition_slot(slot, scope_signature=scope_signature)
     if isinstance(slot, NumericValueSlot):
         entity = slot.entity or frame_entity
         if not entity:
             raise ValueError("numeric_value slot requires an entity from slot or fact frame")
-        left = NumRefNode(type="num_ref", name=_to_snake_case(slot.attribute), args=[_entity_to_term(entity)], unit=slot.unit)
+        left = NumRefNode(
+            type="num_ref",
+            name=_to_snake_case(slot.attribute),
+            args=[_entity_to_term(entity, scope_signature=scope_signature)],
+            unit=slot.unit,
+        )
         right = NumberTerm(kind="number", value=slot.value, unit=slot.unit)
         return CompareNode(type="compare", op="=", left=left, right=right)
     if isinstance(slot, ArithmeticExpressionSlot):
         return _compile_arithmetic_expression_slot(slot)
     if isinstance(slot, EntityRelationSlot):
-        args: list[Term] = [_entity_to_term(slot.subject), _entity_to_term(slot.object)]
+        args: list[Term] = [
+            _entity_to_term(slot.subject, scope_signature=scope_signature),
+            _entity_to_term(slot.object, scope_signature=scope_signature),
+        ]
         node: LogicNode = PredNode(type="pred", name=_to_snake_case(slot.relation), args=args)
         return NotNode(type="not", body=node) if not slot.polarity else node
 
     raise ValueError(f"Unsupported frame slot instance: {type(slot)!r}")
 
 
-def _compile_predicate_slot(slot: PredicateSlot) -> LogicNode:
+def _compile_predicate_slot(slot: PredicateSlot, *, scope_signature: str | None = None) -> LogicNode:
     node: LogicNode = PredNode(
         type="pred",
         name=_to_snake_case(slot.name),
-        args=[_entity_to_term(slot.entity)],
+        args=[_entity_to_term(slot.entity, scope_signature=scope_signature)],
     )
     return NotNode(type="not", body=node) if not slot.polarity else node
 
 
-def _compile_numeric_condition_slot(slot: NumericConditionSlot) -> LogicNode:
-    left = NumRefNode(type="num_ref", name=_to_snake_case(slot.attribute), args=[_entity_to_term(slot.entity)], unit=slot.unit)
+def _compile_numeric_condition_slot(slot: NumericConditionSlot, *, scope_signature: str | None = None) -> LogicNode:
+    left = NumRefNode(
+        type="num_ref",
+        name=_to_snake_case(slot.attribute),
+        args=[_entity_to_term(slot.entity, scope_signature=scope_signature)],
+        unit=slot.unit,
+    )
     if slot.expression is not None:
         right: NumericExpression = _compile_arithmetic_expression_slot(slot.expression)
     elif slot.value is not None:
@@ -167,11 +225,30 @@ def _scope_to_quantified_var(scope: str) -> QuantifiedVariable:
     return QuantifiedVariable(name="x", domain=singular or None)
 
 
-def _entity_to_term(entity: str) -> Term:
+def _entity_to_term(entity: str, *, scope_signature: str | None = None) -> Term:
     normalized = _to_snake_case(entity)
-    if normalized in {"x", "student", "person", "learner", "candidate"}:
+    if scope_signature is not None and _phrase_signature(entity) == scope_signature:
+        return VarTerm(kind="var", name="x")
+    if normalized in {"x", "student", "students", "person", "people", "learner", "learners", "candidate", "candidates"}:
         return VarTerm(kind="var", name="x")
     return ConstTerm(kind="const", name=normalized, surface=entity)
+
+
+def _phrase_signature(text: str) -> str:
+    normalized = _to_snake_case(text)
+    tokens = [token for token in normalized.split("_") if token and token not in {"a", "an", "the"}]
+    singularized = [_singularize_token(token) for token in tokens]
+    return "_".join(singularized)
+
+
+def _singularize_token(token: str) -> str:
+    if len(token) > 3 and token.endswith("ies"):
+        return token[:-3] + "y"
+    if len(token) > 3 and token.endswith(("sses", "shes", "ches", "xes", "zes")):
+        return token[:-2]
+    if len(token) > 2 and token.endswith("s") and not token.endswith("ss"):
+        return token[:-1]
+    return token
 
 
 def _to_snake_case(text: str) -> str:
@@ -182,7 +259,7 @@ def _to_snake_case(text: str) -> str:
     return collapsed
 
 
-def _with_metadata(
+def _with_metadata_recursive(
     node: LogicNode,
     *,
     source_id: str,
@@ -190,10 +267,109 @@ def _with_metadata(
     premise_id: int | None = None,
     candidate_label: str | None = None,
 ) -> LogicNode:
-    return replace(
+    updated = replace(
         node,
         source_id=source_id,
         source_text=source_text,
         premise_id=premise_id,
         candidate_label=candidate_label,
     )
+    if isinstance(updated, NotNode):
+        return replace(updated, body=_with_metadata_recursive(updated.body, source_id=source_id, source_text=source_text, premise_id=premise_id, candidate_label=candidate_label))
+    if isinstance(updated, AndNode | OrNode):
+        return replace(
+            updated,
+            operands=[
+                _with_metadata_recursive(
+                    item,
+                    source_id=source_id,
+                    source_text=source_text,
+                    premise_id=premise_id,
+                    candidate_label=candidate_label,
+                )
+                for item in updated.operands
+            ],
+        )
+    if isinstance(updated, ImpliesNode):
+        return replace(
+            updated,
+            if_node=_with_metadata_recursive(
+                updated.if_node,
+                source_id=source_id,
+                source_text=source_text,
+                premise_id=premise_id,
+                candidate_label=candidate_label,
+            ),
+            then=_with_metadata_recursive(
+                updated.then,
+                source_id=source_id,
+                source_text=source_text,
+                premise_id=premise_id,
+                candidate_label=candidate_label,
+            ),
+        )
+    if isinstance(updated, ForallNode | ExistsNode):
+        return replace(
+            updated,
+            body=_with_metadata_recursive(
+                updated.body,
+                source_id=source_id,
+                source_text=source_text,
+                premise_id=premise_id,
+                candidate_label=candidate_label,
+            ),
+        )
+    if isinstance(updated, CompareNode):
+        return replace(
+            updated,
+            left=_with_metadata_numeric_expr(
+                updated.left,
+                source_id=source_id,
+                source_text=source_text,
+                premise_id=premise_id,
+                candidate_label=candidate_label,
+            ),
+            right=_with_metadata_numeric_expr(
+                updated.right,
+                source_id=source_id,
+                source_text=source_text,
+                premise_id=premise_id,
+                candidate_label=candidate_label,
+            ),
+        )
+    if isinstance(updated, ArithNode):
+        return replace(
+            updated,
+            operands=[
+                _with_metadata_numeric_expr(
+                    item,
+                    source_id=source_id,
+                    source_text=source_text,
+                    premise_id=premise_id,
+                    candidate_label=candidate_label,
+                )
+                for item in updated.operands
+            ],
+        )
+    if isinstance(updated, NumRefNode):
+        return updated
+    return updated
+
+
+def _with_metadata_numeric_expr(
+    expression: NumericExpression,
+    *,
+    source_id: str,
+    source_text: str,
+    premise_id: int | None,
+    candidate_label: str | None,
+) -> NumericExpression:
+    if isinstance(expression, NumRefNode | ArithNode):
+        return _with_metadata_recursive(
+            expression,
+            source_id=source_id,
+            source_text=source_text,
+            premise_id=premise_id,
+            candidate_label=candidate_label,
+        )
+    return expression

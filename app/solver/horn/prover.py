@@ -33,6 +33,7 @@ def prove_entailment(
     derivations: list[HornDerivation] = []
     warnings: list[str] = []
     unsupported_features: list[str] = []
+    contraposition_rejections: list[str] = []
 
     for premise in premise_asts:
         extracted = _extract_from_premise(premise, constants)
@@ -58,7 +59,7 @@ def prove_entailment(
             derived_rule, rejection = derive_contrapositive(rule)
             if derived_rule is None:
                 if rejection is not None:
-                    unsupported_features.append(rejection)
+                    contraposition_rejections.append(rejection)
                 continue
             contraposed_rules.append(derived_rule)
         rules.extend(contraposed_rules)
@@ -91,7 +92,7 @@ def prove_entailment(
                 status="ok",
                 used_premise_ids=matched_premise_ids,
                 derived_facts=derivations,
-                warnings=_unique_strings(warnings),
+                warnings=_unique_strings([*warnings, *contraposition_rejections]),
                 unsupported_features=_unique_strings(unsupported_features),
             )
         gap_message = "unsupported_quantifier_no_schema_match"
@@ -100,7 +101,7 @@ def prove_entailment(
             status="solver_capability_gap",
             used_premise_ids=[],
             derived_facts=derivations,
-            warnings=_unique_strings([*warnings, gap_message]),
+            warnings=_unique_strings([*warnings, *contraposition_rejections, gap_message]),
             unsupported_features=_unique_strings([*unsupported_features, gap_message]),
         )
 
@@ -112,7 +113,7 @@ def prove_entailment(
                 status="solver_capability_gap",
                 used_premise_ids=[],
                 derived_facts=derivations,
-                warnings=_unique_strings([*warnings, *(existential_result.warnings or [])]),
+                warnings=_unique_strings([*warnings, *contraposition_rejections, *(existential_result.warnings or [])]),
                 unsupported_features=_unique_strings([*unsupported_features, *(existential_result.warnings or [])]),
             )
         for instantiated_claim in existential_result.instances:
@@ -134,7 +135,7 @@ def prove_entailment(
                     status="ok",
                     used_premise_ids=used,
                     derived_facts=derivations,
-                    warnings=_unique_strings(warnings),
+                    warnings=_unique_strings([*warnings, *contraposition_rejections]),
                     unsupported_features=_unique_strings(unsupported_features),
                 )
         return HornEntailmentResult(
@@ -142,7 +143,7 @@ def prove_entailment(
             status="ok",
             used_premise_ids=[],
             derived_facts=derivations,
-            warnings=_unique_strings(warnings),
+            warnings=_unique_strings([*warnings, *contraposition_rejections]),
             unsupported_features=_unique_strings(unsupported_features),
         )
 
@@ -153,7 +154,7 @@ def prove_entailment(
             status="solver_capability_gap",
             used_premise_ids=[],
             derived_facts=derivations,
-            warnings=_unique_strings([*warnings, "unsupported_non_horn_claim"]),
+            warnings=_unique_strings([*warnings, *contraposition_rejections, "unsupported_non_horn_claim"]),
             unsupported_features=_unique_strings([*unsupported_features, "unsupported_non_horn_claim"]),
         )
 
@@ -163,14 +164,20 @@ def prove_entailment(
             status="solver_capability_gap",
             used_premise_ids=[],
             derived_facts=derivations,
-            warnings=_unique_strings([*warnings, "unsupported_unbounded_claim_variable"]),
+            warnings=_unique_strings([*warnings, *contraposition_rejections, "unsupported_unbounded_claim_variable"]),
             unsupported_features=_unique_strings([*unsupported_features, "unsupported_unbounded_claim_variable"]),
         )
+
+    effective_unsupported = list(unsupported_features)
+    if claim_literal.negated:
+        effective_unsupported.extend(contraposition_rejections)
+    else:
+        warnings.extend(contraposition_rejections)
 
     entailed = claim_literal in known_facts
     used_premise_ids = sorted(known_facts.get(claim_literal, set()))
     status = "ok"
-    if not entailed and unsupported_features:
+    if not entailed and effective_unsupported:
         status = "solver_capability_gap"
     return HornEntailmentResult(
         entailed=entailed,
@@ -178,7 +185,7 @@ def prove_entailment(
         used_premise_ids=used_premise_ids,
         derived_facts=derivations,
         warnings=_unique_strings(warnings),
-        unsupported_features=_unique_strings(unsupported_features),
+        unsupported_features=_unique_strings(effective_unsupported),
     )
 
 

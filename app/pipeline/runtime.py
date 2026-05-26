@@ -16,6 +16,7 @@ from app.llm.extractor import FrameExtractor
 from app.logic.ast import LogicNode, NotNode
 from app.logic.compiler import compile_frame_to_ast
 from app.logic.frames import ParseFrame
+from app.logic.normalization import canonicalize_logic_bundle
 from app.numeric import NumericLayerResult, build_numeric_layer
 from app.output.decision import CandidateEntailment, decide_answer
 from app.questions import extract_candidates
@@ -204,7 +205,27 @@ class AsyncRuntimePipeline:
                 stages=stages,
             )
 
-        numeric_result, numeric_stage = self._run_numeric_layer(premise_bundle, candidate_asts)
+        canonical_stage_start = time.perf_counter()
+        canonicalized = canonicalize_logic_bundle(premise_bundle.asts, candidate_asts)
+        canonical_stage = TraceStage(
+            name="ast_canonicalization",
+            status="ok",
+            duration_ms=_elapsed_ms(canonical_stage_start),
+            warnings=list(canonicalized.warnings),
+            metadata={
+                "predicate_alias_count": canonicalized.predicate_alias_count,
+                "predicate_alias_rejected_count": canonicalized.predicate_alias_rejected_count,
+                "entity_alias_count": canonicalized.entity_alias_count,
+                "entity_alias_rejected_count": canonicalized.entity_alias_rejected_count,
+                "relation_repair_count": canonicalized.relation_repair_count,
+                "relation_repair_rejected_count": canonicalized.relation_repair_rejected_count,
+            },
+        )
+        stages.append(canonical_stage)
+        canonical_premise_bundle = _PremiseBundle(frames=premise_bundle.frames, asts=canonicalized.premise_asts)
+        canonical_candidate_asts = canonicalized.candidate_asts
+
+        numeric_result, numeric_stage = self._run_numeric_layer(canonical_premise_bundle, canonical_candidate_asts)
         stages.append(numeric_stage)
         if numeric_stage.status == "failed" or numeric_result is None:
             message = numeric_stage.warnings[0] if numeric_stage.warnings else "Numeric layer failed"
@@ -222,12 +243,12 @@ class AsyncRuntimePipeline:
                 stages=stages,
             )
 
-        citation_registry = build_source_registry(premise_bundle.asts, candidate_asts)
+        citation_registry = build_source_registry(canonical_premise_bundle.asts, canonical_candidate_asts)
 
         entailments, solver_stage = self._run_symbolic_solver(
-            premise_bundle.asts,
+            canonical_premise_bundle.asts,
             candidate_result,
-            candidate_asts,
+            canonical_candidate_asts,
             numeric_result=numeric_result,
             premises_nl=context.premises_nl,
         )
@@ -249,7 +270,11 @@ class AsyncRuntimePipeline:
             )
 
         decision_stage_start = time.perf_counter()
-        decision_result = decide_answer(candidate_result.question_type, entailments)
+        decision_result = decide_answer(
+            candidate_result.question_type,
+            entailments,
+            question_text=candidate_result.question_text,
+        )
         decision_stage = TraceStage(
             name="answer_decision",
             status="ok" if decision_result.status == "ok" else "partial",
@@ -294,7 +319,7 @@ class AsyncRuntimePipeline:
             ),
             proof_trace=[
                 self._build_numeric_proof_step(numeric_result),
-                *self._build_solver_proof_steps(entailments, candidate_asts, citation_registry),
+                *self._build_solver_proof_steps(entailments, canonical_candidate_asts, citation_registry),
                 self._build_decision_proof_step(
                     candidate_result.question_type,
                     decision_result.answer,
@@ -947,6 +972,8 @@ def _build_decision_details(
 
     if answer == "Unknown":
         details["unknown_reason"] = _classify_unknown_reason(question_type, candidate_outcomes, decision_result.warnings)
+    if getattr(decision_result, "decision_metadata", None):
+        details["policy"] = dict(decision_result.decision_metadata)
     return details
 
 

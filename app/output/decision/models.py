@@ -23,4 +23,4 @@ class AnswerDecisionResult:
     status: Literal["ok", "partial"]
     used_premise_ids: list[int] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-
+    decision_metadata: dict[str, object] = field(default_factory=dict)

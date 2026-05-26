@@ -76,6 +76,53 @@ class HornSolverTests(unittest.TestCase):
         self.assertTrue(result.entailed)
         self.assertTrue(any(item.method == "contraposition" for item in result.derived_facts))
 
+    def test_multi_antecedent_chain_proves_final_conclusion(self):
+        premises = [
+            _fact("a", "learner", premise_id=1),
+            _fact("b", "learner", premise_id=2),
+            _fact("d", "learner", premise_id=3),
+            _fact("f", "learner", premise_id=4),
+            _rule(
+                AndNode(
+                    type="and",
+                    operands=[_fact("a", "learner", premise_id=5), _fact("b", "learner", premise_id=5)],
+                ),
+                _fact("c", "learner", premise_id=5),
+                premise_id=5,
+            ),
+            _rule(
+                AndNode(
+                    type="and",
+                    operands=[_fact("c", "learner", premise_id=6), _fact("d", "learner", premise_id=6)],
+                ),
+                _fact("e", "learner", premise_id=6),
+                premise_id=6,
+            ),
+            _rule(
+                AndNode(
+                    type="and",
+                    operands=[_fact("e", "learner", premise_id=7), _fact("f", "learner", premise_id=7)],
+                ),
+                _fact("g", "learner", premise_id=7),
+                premise_id=7,
+            ),
+        ]
+        claim = PredNode(
+            type="pred",
+            name="g",
+            args=[ConstTerm(kind="const", name="learner", surface="Learner")],
+            source_id="question",
+            source_text="Is g true for learner?",
+            candidate_label="claim",
+        )
+
+        result = prove_entailment(premises, claim)
+
+        self.assertTrue(result.entailed)
+        self.assertEqual(result.status, "ok")
+        forward_steps = [item for item in result.derived_facts if item.method == "forward_chaining"]
+        self.assertGreaterEqual(len(forward_steps), 3)
+
     def test_unsafe_contraposition_is_rejected(self):
         premise_rule = _rule(
             AndNode(
@@ -107,7 +154,34 @@ class HornSolverTests(unittest.TestCase):
         self.assertEqual(result.status, "solver_capability_gap")
         self.assertIn("unsafe_contraposition_non_literal_antecedent", result.unsupported_features)
 
+    def test_positive_claim_does_not_mark_capability_gap_for_optional_contraposition_rejection(self):
+        premises = [
+            _fact("eligible", "mai", premise_id=30),
+            _rule(
+                AndNode(
+                    type="and",
+                    operands=[_fact("eligible", "mai", premise_id=31), _fact("passing", "mai", premise_id=31)],
+                ),
+                _fact("approved", "mai", premise_id=31),
+                premise_id=31,
+            ),
+        ]
+        claim = PredNode(
+            type="pred",
+            name="approved",
+            args=[ConstTerm(kind="const", name="mai", surface="Mai")],
+            source_id="question",
+            source_text="Is Mai approved?",
+            candidate_label="claim",
+        )
+
+        result = prove_entailment(premises, claim)
+
+        self.assertFalse(result.entailed)
+        self.assertEqual(result.status, "ok")
+        self.assertIn("unsafe_contraposition_non_literal_antecedent", result.warnings)
+        self.assertNotIn("unsafe_contraposition_non_literal_antecedent", result.unsupported_features)
+
 
 if __name__ == "__main__":
     unittest.main()
-

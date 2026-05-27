@@ -381,11 +381,11 @@ Every later reasoning layer depends on stable semantics. The LLM must produce co
 
 ### Completion Checklist
 
-- [ ] Parse-frame models exist.
-- [ ] Typed AST models exist.
-- [ ] Frame-to-AST compiler exists.
-- [ ] Validation and normalization tests pass.
-- [ ] `report.md` contains Batch 3 result.
+- [x] Parse-frame models exist.
+- [x] Typed AST models exist.
+- [x] Frame-to-AST compiler exists.
+- [x] Validation and normalization tests pass.
+- [x] `report.md` contains Batch 3 result.
 
 ## Mandatory Batch 4 - Debug Trace and Proof Trace Infrastructure
 
@@ -1647,8 +1647,8 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] Batch 1 - Foundation, Config, and Runtime-Safe Data Layer
 - [x] Batch 2 - Cache Keys, Candidate Extraction, and Question Typing
 - [x] Batch 3 - Parse Frame, Typed AST Schema, Compilation, Validation, and Normalization
-- [x] Batch 4 - Debug Trace and Proof Trace Infrastructure
-- [x] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
+- [ ] Batch 4 - Debug Trace and Proof Trace Infrastructure
+- [ ] Batch 5 - LLM Parse-Frame Extractor with Mockable Runtime
 - [ ] Batch 6 - Async Pipeline, Premise Cache, and Single-Flight Locks
 - [ ] Batch 7 - Numeric Layer with Source Provenance
 - [ ] Batch 8 - Horn Prover, Contraposition, Quantifier Instantiation, and Entailment Decision
@@ -1667,7 +1667,7 @@ After all components exist, the project needs end-to-end confidence that the imp
 
 - [x] M1 - Runtime-Safe Foundation
 - [x] M2 - Query Contract
-- [ ] M3 - Logic Representation Contract
+- [x] M3 - Logic Representation Contract
 - [ ] M4 - Observability Foundation
 - [ ] M5 - LLM Semantic Parser
 - [ ] M6 - Async Runtime Skeleton
@@ -1705,19 +1705,19 @@ After all components exist, the project needs end-to-end confidence that the imp
 - [x] B2-T8
 - [x] B2-T9
 - [x] B2-T10
-- [ ] B3-T1
-- [ ] B3-T2
-- [ ] B3-T3
-- [ ] B3-T4
-- [ ] B3-T5
-- [ ] B3-T6
-- [ ] B3-T7
-- [ ] B3-T8
-- [ ] B3-T9
-- [ ] B3-T10
-- [ ] B3-T11
-- [ ] B3-T12
-- [ ] B3-T13
+- [x] B3-T1
+- [x] B3-T2
+- [x] B3-T3
+- [x] B3-T4
+- [x] B3-T5
+- [x] B3-T6
+- [x] B3-T7
+- [x] B3-T8
+- [x] B3-T9
+- [x] B3-T10
+- [x] B3-T11
+- [x] B3-T12
+- [x] B3-T13
 - [ ] B4-T1
 - [ ] B4-T2
 - [ ] B4-T3

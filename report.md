@@ -345,3 +345,110 @@ Continue to next batch with fresh A1/A2.
 
 ### Notes
 A2 noted inaccurate file line counts in the Batch 3 execution entry and that Batch 4/5 tracker state correction was not explicitly disclosed by A1. These are non-blocking documentation warnings; next batch may proceed.
+
+## Batch 4 Execution Result - 2026-05-27
+
+### Completed Tasks
+- B4-T1: Complete (ran credential-gated live LLM connectivity smoke check).
+- B4-T2: Complete (smoke validates endpoint/model/response shape with secret-safe output).
+- B4-T3: Complete (debug trace schema already present and validated).
+- B4-T4: Complete (proof trace step schema already present and validated).
+- B4-T5: Complete (root-cause category set covers required Batch 4 categories).
+- B4-T6: Complete (earliest parser-stage root cause preserved; parser-stage failure remains `llm_frame_error` in pipeline regression tests).
+- B4-T7: Complete (safe serialization and redaction in trace serializers/writers).
+- B4-T8: Complete (JSON/JSONL debug artifact writers present and validated).
+- B4-T9: Complete (added parser replay and numeric validation failure artifact writer contracts).
+- B4-T10: Complete (trace/contract tests cover redaction, runtime-safe payload constraints, and writer contracts).
+- B4-T11: Complete (appended this Batch 4 section).
+
+### Files Created or Modified
+- app/tracing/artifact_contracts.py
+- app/tracing/__init__.py
+- tests/test_debug_trace.py
+- task.md
+- report.md
+
+### Files Over 200 Lines
+- task.md (1513 lines): updated only for Batch 4 progress/batch/milestone/task-ID tracking.
+- report.md (288 lines): append-only shared batch execution log.
+
+### Tests or Validations Run
+- `python -m unittest tests/test_debug_trace.py` - Passed.
+- `python -m unittest tests/test_frame_events.py` - Passed.
+- `python -m unittest tests/test_async_pipeline.py` - Passed.
+- `python scripts/smoke_test_llm_connectivity.py --env-path .env --timeout-seconds 20` - Blocked (`network_or_provider_unavailable`, WinError 10061, endpoint refused connection).
+
+### Acceptance Criteria Check
+- Trace serialization is deterministic and secret-safe: Satisfied.
+- Root-cause categories are stable and test-covered: Satisfied.
+- Trace objects reference runtime IDs without gold-answer/FOL leakage: Satisfied.
+- Earliest parser/root-cause category remains intact through downstream stages: Satisfied in tested parser-stage failure path.
+- Live LLM connectivity tested with `.env` or sanitized blocker documented: Satisfied (blocked status recorded with sanitized details).
+
+### Artifacts Produced
+- Artifact contract writer module for:
+  - `parser_replay_*.jsonl`
+  - `numeric_validation_failures.jsonl`
+- Existing/validated contract path for `artifacts/frame_events.jsonl`.
+- Sanitized smoke output record (blocked connectivity status) captured in this report.
+
+### Checklist Update
+- Marked `Batch 4 - Debug Trace and Proof Trace Infrastructure` complete in `task.md`.
+- Marked milestone `M4 - Observability Foundation` complete.
+- Marked task IDs `B4-T1` through `B4-T11` complete.
+
+### Key Implementation Decisions
+- Kept artifact-contract writers in `app/tracing` so all observability artifacts share the same redaction/runtime-safety guardrails.
+- Enforced filename contracts for parser replay and numeric failure artifacts to prevent accidental path drift.
+- Treated live smoke as credential/provider-gated validation with explicit blocked reporting, not as pass-by-mock.
+
+### Risks or Open Issues
+- Live provider connectivity remains blocked in this environment (`WinError 10061` to `api.shopaikey.com`), so successful live connectivity is still unverified.
+
+### Minor Issues Fixed During Execution
+- Added missing dedicated writer contracts for parser replay and numeric validation failure artifacts (in-scope Batch 4 gap).
+
+### Workflow Integrity Check
+- No workflow integrity issue identified for Batch 4 scope.
+- Observability contracts now cover required trace schemas, safe serialization, debug artifact writing, and parser/numeric incident artifact paths.
+
+### Notes for Next Batch
+- Batch 5 can proceed and consume Batch 4 tracing contracts directly.
+- If network/provider access becomes available, rerun live connectivity smoke and record a passed result before relying on live parser behavior.
+
+## Orchestrator Batch Cycle Result - 2026-05-27
+
+### Selected Batch
+- Batch: Batch 4 - Debug Trace and Proof Trace Infrastructure
+- Task IDs: B4-T1 through B4-T11
+
+### A1 Execution Summary
+- Completed: Batch 4 tracing validation and missing artifact writer contracts.
+- Files changed: app/tracing/artifact_contracts.py, app/tracing/__init__.py, tests/test_debug_trace.py, task.md, report.md.
+- Tests run: `python -m unittest tests/test_debug_trace.py`; `python -m unittest tests/test_frame_events.py`; `python -m unittest tests/test_async_pipeline.py`; `python scripts/smoke_test_llm_connectivity.py --env-path .env --timeout-seconds 20`.
+- Report location: report.md Batch 4 Execution Result - 2026-05-27.
+- Open issues: Live provider connectivity blocked by environment/network (`WinError 10061`).
+
+### A2 Review Summary
+- Review outcome: ACCEPTED_WITH_WARNINGS.
+- Architecture aligned: true.
+- Hardcoding found: false.
+- Fake implementation found: false.
+- Tests passed: Batch 4 unit validations rerun by A2 passed.
+- Tests failed: none.
+- Tests blocked: live connectivity smoke remained blocked.
+- Progress tracking accurate: true.
+
+### Final Decision
+ACCEPTED_WITH_WARNINGS
+
+### Agent Lifecycle
+- A1 status: retired after Batch 4.
+- A2 status: retired after Batch 4 review.
+- Next cycle agent policy: create fresh A1/A2 pair for Batch 5.
+
+### Required Next Action
+Continue to next batch with fresh A1/A2.
+
+### Notes
+A2 noted a stale `report.md` line count in the Batch 4 execution entry and the live provider connectivity blocker. Neither issue blocks Batch 5, but live smoke should be rerun and appended when provider/network access is available.

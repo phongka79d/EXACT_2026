@@ -8,6 +8,8 @@ import hashlib
 import json
 import random
 import re
+from datetime import datetime, timezone
+from pathlib import Path
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
@@ -15,6 +17,7 @@ from typing import Any, Literal, Protocol
 from app.config.redaction import redact_secret
 from app.logic.frames import ParseFrame, parse_frame
 from app.logic.validation import validate_parse_frame
+from app.tracing import write_parser_replay_jsonl
 
 from .client import OpenAICompatibleChatClient
 from .errors import FrameExtractionError, LLMResponseError, LLMTransientError
@@ -28,6 +31,7 @@ from .prompts import (
 
 REFERENCE_ONLY_INPUT_KEYS = frozenset({"premises-fol", "premises_fol", "answer", "explanation", "idx"})
 _BEARER_RE = re.compile(r"Bearer\s+[A-Za-z0-9._\-]+", re.IGNORECASE)
+_FRAME_EVENTS_PATH = Path("artifacts/frame_events.jsonl")
 _RULE_IF_ALIASES = (
     "conditions",
     "condition",
@@ -224,6 +228,7 @@ class LLMFrameExtractor:
                 content, call_attempts, call_retries = await self._call_model_with_retry(messages)
                 total_attempts += call_attempts
                 total_retries += call_retries
+                self._append_raw_response_event(request, cache_key=cache_key, raw_content=content)
             except (LLMTransientError, LLMResponseError) as exc:
                 sanitized = _sanitize_error_message(str(exc), api_key=self._client.api_key_for_redaction)
                 diagnostics = self._build_diagnostics(
@@ -233,6 +238,13 @@ class LLMFrameExtractor:
                     cache_hit=False,
                     errors=[*errors, sanitized],
                     failure_type="provider_error",
+                )
+                self._write_parser_replay_fixture(
+                    request=request,
+                    cache_key=cache_key,
+                    raw_content=None,
+                    diagnostics=diagnostics,
+                    error_message=sanitized,
                 )
                 raise FrameExtractionError("Model call failed during frame extraction", diagnostics=diagnostics) from exc
 
@@ -252,6 +264,13 @@ class LLMFrameExtractor:
                         cache_hit=False,
                         errors=errors,
                         failure_type="frame_validation_error",
+                    )
+                    self._write_parser_replay_fixture(
+                        request=request,
+                        cache_key=cache_key,
+                        raw_content=content,
+                        diagnostics=diagnostics,
+                        error_message=sanitized,
                     )
                     raise FrameExtractionError(
                         "Frame extraction failed after repair attempts",
@@ -284,6 +303,55 @@ class LLMFrameExtractor:
                     normalization_warnings=normalization_warnings,
                 ),
             )
+
+    def _append_raw_response_event(self, request: FrameExtractionInput, *, cache_key: str, raw_content: str) -> None:
+        _append_frame_event(
+            _FRAME_EVENTS_PATH,
+            "raw_response",
+            {
+                "source_id": request.source_id,
+                "source_text": request.source_text,
+                "premise_id": request.premise_id,
+                "candidate_label": request.candidate_label,
+                "frame_mode": request.mode,
+                "cache_key_hash": hashlib.sha256(cache_key.encode("utf-8")).hexdigest(),
+                "model": self._client.model,
+                "prompt_version": self._prompt_version,
+                "extractor_version": self._extractor_version,
+                "raw_response": raw_content,
+            },
+        )
+
+    def _write_parser_replay_fixture(
+        self,
+        *,
+        request: FrameExtractionInput,
+        cache_key: str,
+        raw_content: str | None,
+        diagnostics: Mapping[str, Any],
+        error_message: str,
+    ) -> None:
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        replay_path = Path("artifacts") / f"parser_replay_{timestamp}.jsonl"
+        payload = {
+            "source_id": request.source_id,
+            "source_text": request.source_text,
+            "premise_id": request.premise_id,
+            "candidate_label": request.candidate_label,
+            "frame_mode": request.mode,
+            "cache_key_hash": hashlib.sha256(cache_key.encode("utf-8")).hexdigest(),
+            "model": diagnostics.get("model"),
+            "prompt_version": diagnostics.get("prompt_version"),
+            "extractor_version": diagnostics.get("extractor_version"),
+            "failure_type": diagnostics.get("failure_type"),
+            "attempts": diagnostics.get("attempts"),
+            "repair_count": diagnostics.get("repair_count"),
+            "retry_count": diagnostics.get("retry_count"),
+            "errors": list(diagnostics.get("errors", [])),
+            "error_message": error_message,
+            "raw_response": raw_content,
+        }
+        write_parser_replay_jsonl(replay_path, [payload])
 
     def _build_initial_messages(self, request: FrameExtractionInput) -> list[dict[str, str]]:
         if request.mode == "premise":
@@ -503,6 +571,14 @@ def _extract_first_json_object(content: str) -> str | None:
                 return text[start : index + 1]
 
     return None
+
+
+def _append_frame_event(path: str | Path, event: str, payload: Mapping[str, Any]) -> None:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"event": event, "payload": dict(payload)}
+    with output_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n")
 
 
 def _normalize_model_payload(payload: dict[str, Any], request: FrameExtractionInput) -> tuple[dict[str, Any], list[str]]:

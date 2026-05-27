@@ -1,6 +1,7 @@
 import asyncio
 import json
 import unittest
+from pathlib import Path
 from typing import Any
 
 from app.llm import FrameExtractionInput, LLMFrameExtractor, MockFrameExtractor, build_frame_cache_key
@@ -231,6 +232,19 @@ class MockFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
 
 
 class LLMFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.frame_events_path = Path("artifacts/frame_events.jsonl")
+        if self.frame_events_path.exists():
+            self.frame_events_path.unlink()
+        for replay in Path("artifacts").glob("parser_replay_*.jsonl"):
+            replay.unlink()
+
+    def tearDown(self):
+        if self.frame_events_path.exists():
+            self.frame_events_path.unlink()
+        for replay in Path("artifacts").glob("parser_replay_*.jsonl"):
+            replay.unlink()
+
     async def test_invalid_first_pass_triggers_repair(self):
         invalid_first_pass = json.dumps(
             {
@@ -263,6 +277,8 @@ class LLMFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
         repair_prompt = client.calls[1][1]["content"]
         self.assertIn("validation_error", repair_prompt)
         self.assertIn("source_text", repair_prompt)
+        events = [json.loads(line) for line in self.frame_events_path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([event["event"] for event in events], ["raw_response", "raw_response"])
 
     async def test_malformed_payload_enters_repair_loop(self):
         malformed_first_pass = "{'kind':'fact','source_text':'unterminated}"
@@ -281,6 +297,39 @@ class LLMFrameExtractorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.frame.kind, "fact")
         self.assertEqual(result.diagnostics["repair_count"], 1)
+
+    async def test_failed_extraction_writes_parser_replay_fixture(self):
+        invalid_first_pass = json.dumps(
+            {
+                "kind": "fact",
+                "entity": "Mai",
+                "facts": [],
+                "source_id": "premise_0001",
+                "source_text": "Mai has GPA 7.2.",
+                "premise_id": 1,
+                "warnings": [],
+            }
+        )
+        client = _ScriptedClient([invalid_first_pass])
+        extractor = LLMFrameExtractor(client=client, max_attempts=1, max_repairs=0, jitter_seconds=0.0)
+        request = FrameExtractionInput(
+            mode="premise",
+            source_id="premise_0001",
+            premise_id=1,
+            source_text="Mai has GPA 7.2.",
+        )
+
+        with self.assertRaisesRegex(Exception, "Frame extraction failed after repair attempts"):
+            await extractor.extract_frame(request)
+
+        replay_files = list(Path("artifacts").glob("parser_replay_*.jsonl"))
+        self.assertEqual(len(replay_files), 1)
+        replay_lines = replay_files[0].read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(replay_lines), 1)
+        replay_payload = json.loads(replay_lines[0])
+        self.assertEqual(replay_payload["source_id"], "premise_0001")
+        self.assertEqual(replay_payload["failure_type"], "frame_validation_error")
+        self.assertIn("errors", replay_payload)
 
     async def test_transient_failure_retries_with_backoff(self):
         client = _ScriptedClient([LLMTransientError("temporary outage"), json.dumps(_valid_fact_frame_payload())])

@@ -4,9 +4,11 @@ import unittest
 from pathlib import Path
 
 from app.tracing import (
+    NUMERIC_VALIDATION_FAILURES_PATH,
     ROOT_CAUSE_CATEGORIES,
     CacheMetadata,
     DebugTrace,
+    PARSER_REPLAY_PREFIX,
     NumericDerivation,
     ProofTraceStep,
     SourceCitation,
@@ -15,6 +17,8 @@ from app.tracing import (
     serialize_proof_trace_step,
     write_debug_trace_json,
     write_debug_trace_jsonl,
+    write_numeric_validation_failures_jsonl,
+    write_parser_replay_jsonl,
 )
 
 
@@ -101,6 +105,43 @@ class DebugTraceTests(unittest.TestCase):
             records = [json.loads(line) for line in lines]
             self.assertEqual(records[0]["status"], "failed")
             self.assertEqual(records[1]["status"], "ok")
+        finally:
+            shutil.rmtree(tmp_path, ignore_errors=True)
+
+    def test_parser_replay_and_numeric_failure_artifact_contracts(self):
+        tmp_path = Path(".pytest_tmp_trace_contract_artifacts")
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path, ignore_errors=True)
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        try:
+            parser_replay_path = tmp_path / f"{PARSER_REPLAY_PREFIX}batch4.jsonl"
+            parser_payloads = [
+                {
+                    "source_id": "premise_0001",
+                    "failure_type": "frame_validation_error",
+                    "headers": {"Authorization": "Bearer must-redact"},
+                }
+            ]
+            write_parser_replay_jsonl(parser_replay_path, parser_payloads)
+            parser_text = parser_replay_path.read_text(encoding="utf-8")
+            self.assertNotIn("must-redact", parser_text)
+
+            numeric_path = tmp_path / NUMERIC_VALIDATION_FAILURES_PATH.name
+            numeric_payloads = [
+                {
+                    "error_type": "unit_mismatch",
+                    "details": "Expected credits but got percent",
+                    "api_key": "sk-test-should-be-redacted",
+                }
+            ]
+            write_numeric_validation_failures_jsonl(numeric_path, numeric_payloads)
+            numeric_text = numeric_path.read_text(encoding="utf-8")
+            self.assertNotIn("sk-test-should-be-redacted", numeric_text)
+
+            with self.assertRaisesRegex(ValueError, "parser_replay_\\*\\.jsonl"):
+                write_parser_replay_jsonl(tmp_path / "replay.jsonl", parser_payloads)
+            with self.assertRaisesRegex(ValueError, "numeric_validation_failures.jsonl"):
+                write_numeric_validation_failures_jsonl(tmp_path / "numeric_failures.jsonl", numeric_payloads)
         finally:
             shutil.rmtree(tmp_path, ignore_errors=True)
 

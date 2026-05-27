@@ -150,6 +150,27 @@ class ParseFrameValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "at least two operands"):
             validate_parse_frame(frame)
 
+    def test_entity_relation_with_complement_validates(self):
+        frame = parse_frame(
+            {
+                "kind": "fact",
+                "facts": [
+                    {
+                        "type": "entity_relation",
+                        "subject": "Mai",
+                        "relation": "qualified_for",
+                        "object": "scholarship",
+                        "complement": "merit",
+                    }
+                ],
+                "source_id": "premise_0007",
+                "source_text": "Mai is qualified for merit scholarship.",
+                "premise_id": 7,
+                "warnings": [],
+            }
+        )
+        validate_parse_frame(frame)
+
 
 if __name__ == "__main__":
     unittest.main()

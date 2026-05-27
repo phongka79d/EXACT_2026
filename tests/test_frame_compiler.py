@@ -149,6 +149,32 @@ class FrameCompilerTests(unittest.TestCase):
             self.assertEqual(node.source_text, frame.source_text)
             self.assertEqual(node.premise_id, 200)
 
+    def test_entity_relation_complement_is_preserved_as_third_argument(self):
+        frame = parse_frame(
+            {
+                "kind": "fact",
+                "facts": [
+                    {
+                        "type": "entity_relation",
+                        "subject": "Mai",
+                        "relation": "qualified_for",
+                        "object": "scholarship",
+                        "complement": "merit",
+                    }
+                ],
+                "source_id": "premise_0300",
+                "source_text": "Mai is qualified for merit scholarship.",
+                "premise_id": 300,
+                "warnings": [],
+            }
+        )
+        validate_parse_frame(frame)
+
+        ast = compile_frame_to_ast(frame)
+        self.assertIsInstance(ast, PredNode)
+        self.assertEqual(ast.name, "qualified_for")
+        self.assertEqual(len(ast.args), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -153,6 +153,8 @@ def _compile_slot(
             _entity_to_term(slot.subject, scope_signature=scope_signature),
             _entity_to_term(slot.object, scope_signature=scope_signature),
         ]
+        if slot.complement is not None:
+            args.append(_entity_to_term(slot.complement, scope_signature=scope_signature))
         node: LogicNode = PredNode(type="pred", name=_to_snake_case(slot.relation), args=args)
         return NotNode(type="not", body=node) if not slot.polarity else node
 

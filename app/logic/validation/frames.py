@@ -128,6 +128,8 @@ def _validate_slot(slot: FrameSlot) -> None:
     if isinstance(slot, EntityRelationSlot):
         if not slot.subject.strip() or not slot.relation.strip() or not slot.object.strip():
             raise ValueError("entity_relation requires non-empty subject/relation/object")
+        if slot.complement is not None and not slot.complement.strip():
+            raise ValueError("entity_relation.complement must be non-empty when provided")
         return
 
     raise ValueError(f"Unsupported slot type: {type(slot)!r}")

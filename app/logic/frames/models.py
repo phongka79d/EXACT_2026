@@ -53,6 +53,7 @@ class EntityRelationSlot:
     subject: str
     relation: str
     object: str
+    complement: str | None = None
     polarity: bool = True
 
 
@@ -173,6 +174,7 @@ def parse_slot(payload: Mapping[str, Any]) -> FrameSlot:
             subject=_require_string(payload, "subject"),
             relation=_require_string(payload, "relation"),
             object=_require_string(payload, "object"),
+            complement=_optional_string(payload.get("complement")),
             polarity=_require_bool(payload, "polarity", default=True),
         )
 
